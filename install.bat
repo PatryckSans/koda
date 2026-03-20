@@ -12,21 +12,46 @@ echo ================================================
 echo.
 
 :: Check Python
-where python >nul 2>&1
-if %errorlevel% neq 0 (
-    where python3 >nul 2>&1
-    if %errorlevel% neq 0 (
+set PYTHON=
+where python >nul 2>&1 && set PYTHON=python
+if not defined PYTHON (
+    where python3 >nul 2>&1 && set PYTHON=python3
+)
+
+if not defined PYTHON (
+    color 0E
+    echo [!] Python not found.
+    echo.
+    where winget >nul 2>&1
+    if %errorlevel% equ 0 (
+        set /p INST="Install Python automatically via winget? [Y/n]: "
+        if /i not "%INST%"=="n" (
+            echo Installing Python 3.12...
+            winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+            if %errorlevel% neq 0 (
+                color 0C
+                echo [ERROR] Python installation failed.
+                pause
+                exit /b 1
+            )
+            :: Refresh PATH
+            set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;%PATH%"
+            set PYTHON=python
+            echo [OK] Python installed
+        ) else (
+            color 0C
+            echo [ERROR] Python 3.8+ is required.
+            pause
+            exit /b 1
+        )
+    ) else (
         color 0C
-        echo [ERROR] Python 3.8+ is required.
+        echo [ERROR] Python 3.8+ is required and winget is not available.
         echo Download from: https://www.python.org/downloads/
         echo Make sure to check "Add Python to PATH" during install.
-        echo.
         pause
         exit /b 1
     )
-    set PYTHON=python3
-) else (
-    set PYTHON=python
 )
 
 :: Verify Python version

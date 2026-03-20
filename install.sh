@@ -48,11 +48,63 @@ for cmd in python3 python; do
         fi
     fi
 done
-[ -z "$PYTHON" ] && fail "Python 3.8+ is required. Install it first:\n  Linux: sudo apt install python3 python3-venv python3-pip\n  macOS: brew install python3"
-ok "Python: $($PYTHON --version)"
+
+if [ -z "$PYTHON" ]; then
+    warn "Python 3.8+ not found."
+    read -p "Install Python automatically? [Y/n] " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        if [ "$PLATFORM" = "linux" ]; then
+            if command -v apt &>/dev/null; then
+                info "Installing via apt..."
+                sudo apt update -qq && sudo apt install -y python3 python3-venv python3-pip
+            elif command -v dnf &>/dev/null; then
+                info "Installing via dnf..."
+                sudo dnf install -y python3 python3-pip
+            elif command -v pacman &>/dev/null; then
+                info "Installing via pacman..."
+                sudo pacman -Sy --noconfirm python python-pip
+            elif command -v zypper &>/dev/null; then
+                info "Installing via zypper..."
+                sudo zypper install -y python3 python3-pip
+            else
+                fail "Could not detect package manager. Install Python 3.8+ manually."
+            fi
+        elif [ "$PLATFORM" = "macos" ]; then
+            if ! command -v brew &>/dev/null; then
+                info "Installing Homebrew first..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            info "Installing Python via Homebrew..."
+            brew install python3
+        fi
+        # Re-check
+        for cmd in python3 python; do
+            if command -v "$cmd" &>/dev/null; then
+                PYTHON="$cmd"
+                break
+            fi
+        done
+        [ -z "$PYTHON" ] && fail "Python installation failed. Install manually and retry."
+        ok "Python installed: $($PYTHON --version)"
+    else
+        fail "Python 3.8+ is required."
+    fi
+else
+    ok "Python: $($PYTHON --version)"
+fi
 
 # --- Check pip/venv ---
-$PYTHON -c "import venv" 2>/dev/null || fail "Python venv module not found.\n  Linux: sudo apt install python3-venv\n  macOS: brew install python3"
+$PYTHON -c "import venv" 2>/dev/null || {
+    warn "Python venv module not found. Installing..."
+    if [ "$PLATFORM" = "linux" ]; then
+        if command -v apt &>/dev/null; then
+            sudo apt install -y python3-venv
+        fi
+    fi
+    $PYTHON -c "import venv" 2>/dev/null || fail "Could not install python3-venv. Install it manually."
+    ok "venv module installed"
+}
 
 # --- Check kiro-cli ---
 if command -v kiro-cli &>/dev/null; then
