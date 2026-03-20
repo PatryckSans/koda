@@ -11,6 +11,15 @@ A TUI (Text User Interface) for [Kiro CLI](https://kiro.dev), built with Python 
 
 **Prerequisites:** Python 3.8+ and [kiro-cli](https://kiro.dev/docs/cli/install/) installed.
 
+### One-click (download and double-click)
+
+| Platform | File | How |
+|----------|------|-----|
+| Windows | [`install.bat`](https://raw.githubusercontent.com/PatryckSans/koda/main/install.bat) | Download → double-click |
+| Linux | [`install-koda.desktop`](https://raw.githubusercontent.com/PatryckSans/koda/main/install-koda.desktop) | Download → right-click → Allow Launching → double-click |
+
+### Terminal
+
 **Linux / macOS:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/PatryckSans/koda/main/install.sh | bash
