@@ -129,8 +129,16 @@ echo [OK] Launcher created
 powershell -Command "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';%INSTALL_DIR%', 'User')"
 echo [OK] Added to PATH
 
+:: Download icon
+echo Downloading icon...
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.png' -OutFile '%INSTALL_DIR%\koda-logo.png' -UseBasicParsing"
+
+:: Convert PNG to ICO for shortcut
+powershell -Command "Add-Type -AssemblyName System.Drawing; $img=[System.Drawing.Image]::FromFile('%INSTALL_DIR%\koda-logo.png'); $icon=[System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]$img).GetHicon()); $fs=[System.IO.File]::Create('%INSTALL_DIR%\koda.ico'); $icon.Save($fs); $fs.Close()" 2>nul
+echo [OK] Icon ready
+
 :: Desktop shortcut
-powershell -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut('%USERPROFILE%\Desktop\KODA.lnk'); $s.TargetPath='cmd.exe'; $s.Arguments='/k \"%INSTALL_DIR%\koda.bat\"'; $s.WorkingDirectory='%USERPROFILE%'; $s.Description='KODA - Kiro Operator Dashboard Application'; $s.Save()"
+powershell -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut('%USERPROFILE%\Desktop\KODA.lnk'); $s.TargetPath='cmd.exe'; $s.Arguments='/k \"%INSTALL_DIR%\koda.bat\"'; $s.WorkingDirectory='%USERPROFILE%'; $s.Description='KODA - Kiro Operator Dashboard Application'; $s.IconLocation='%INSTALL_DIR%\koda.ico,0'; $s.Save()"
 echo [OK] Desktop shortcut created
 
 :: Done

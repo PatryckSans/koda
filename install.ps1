@@ -90,6 +90,20 @@ if ($userPath -notlike "*$INSTALL_DIR*") {
     Write-Ok "Added to PATH (restart terminal to use 'koda' command)"
 }
 
+# --- Download icon ---
+$iconPng = "$INSTALL_DIR\koda-logo.png"
+$iconIco = "$INSTALL_DIR\koda.ico"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.png" -OutFile $iconPng -UseBasicParsing
+try {
+    Add-Type -AssemblyName System.Drawing
+    $img = [System.Drawing.Image]::FromFile($iconPng)
+    $icon = [System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]$img).GetHicon())
+    $fs = [System.IO.File]::Create($iconIco)
+    $icon.Save($fs)
+    $fs.Close()
+    Write-Ok "Icon ready"
+} catch { Write-Warn "Could not convert icon" }
+
 # --- Desktop shortcut ---
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shell = New-Object -ComObject WScript.Shell
@@ -98,6 +112,7 @@ $shortcut.TargetPath = "cmd.exe"
 $shortcut.Arguments = "/k `"$launcher`""
 $shortcut.WorkingDirectory = $env:USERPROFILE
 $shortcut.Description = "KODA - Kiro Operator Dashboard Application"
+if (Test-Path $iconIco) { $shortcut.IconLocation = "$iconIco,0" }
 $shortcut.Save()
 Write-Ok "Desktop shortcut created"
 

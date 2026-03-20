@@ -175,6 +175,11 @@ for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
 done
 [ "$ALIAS_ADDED" = true ] && ok "Shell alias added"
 
+# --- Download icon ---
+ICON_PATH="$INSTALL_DIR/koda-logo.png"
+curl -sSL "https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.png" -o "$ICON_PATH"
+ok "Icon downloaded"
+
 # --- Desktop shortcut (Linux) ---
 if [ "$PLATFORM" = "linux" ]; then
     DESKTOP_DIR="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
@@ -189,7 +194,7 @@ Exec=bash -c 'source $INSTALL_DIR/venv/bin/activate && python -m kiro_tui.main'
 Terminal=true
 Type=Application
 Categories=Development;
-Icon=utilities-terminal
+Icon=$ICON_PATH
 EOF
 
     # Copy to desktop if it exists
@@ -204,14 +209,29 @@ fi
 # --- Desktop shortcut (macOS) ---
 if [ "$PLATFORM" = "macos" ]; then
     APP_DIR="$HOME/Applications/KODA.app/Contents/MacOS"
-    mkdir -p "$APP_DIR"
+    RES_DIR="$HOME/Applications/KODA.app/Contents/Resources"
+    mkdir -p "$APP_DIR" "$RES_DIR"
+    cp "$ICON_PATH" "$RES_DIR/koda-logo.png"
+
+    # Convert PNG to icns if sips is available
+    if command -v sips &>/dev/null; then
+        mkdir -p /tmp/koda_icon.iconset
+        for sz in 16 32 64 128 256 512; do
+            sips -z $sz $sz "$ICON_PATH" --out "/tmp/koda_icon.iconset/icon_${sz}x${sz}.png" &>/dev/null
+        done
+        iconutil -c icns /tmp/koda_icon.iconset -o "$RES_DIR/koda.icns" 2>/dev/null
+        rm -rf /tmp/koda_icon.iconset
+    fi
+
     cat > "$APP_DIR/koda" << EOF
 #!/usr/bin/env bash
 open -a Terminal "$INSTALL_DIR/koda.sh"
 EOF
     chmod +x "$APP_DIR/koda"
 
-    # Info.plist
+    ICON_REF="koda.icns"
+    [ ! -f "$RES_DIR/koda.icns" ] && ICON_REF="koda-logo.png"
+
     cat > "$HOME/Applications/KODA.app/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -221,6 +241,7 @@ EOF
     <key>CFBundleExecutable</key><string>koda</string>
     <key>CFBundleIdentifier</key><string>com.koda.app</string>
     <key>CFBundleVersion</key><string>0.1.0</string>
+    <key>CFBundleIconFile</key><string>$ICON_REF</string>
 </dict>
 </plist>
 EOF
