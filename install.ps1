@@ -35,12 +35,23 @@ foreach ($cmd in @("python3", "python", "py")) {
 if (-not $python) { Write-Fail "Python 3.8+ is required. Download from https://www.python.org/downloads/" }
 Write-Ok "Python: $(& $python --version)"
 
-# --- Check kiro-cli ---
-if (Get-Command kiro-cli -ErrorAction SilentlyContinue) {
-    Write-Ok "kiro-cli: installed"
-} else {
-    Write-Warn "kiro-cli is NOT installed. KODA requires kiro-cli to function."
-    Write-Warn "Install it from: https://kiro.dev/docs/cli/install/"
+# --- Check WSL ---
+try {
+    $wslStatus = wsl --status 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "no wsl" }
+    Write-Ok "WSL available"
+} catch {
+    Write-Fail "WSL is NOT installed. kiro-cli requires WSL to run on Windows. Install with: wsl --install"
+}
+
+# --- Check kiro-cli inside WSL ---
+try {
+    $kiroVer = wsl kiro-cli --version 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "no kiro" }
+    Write-Ok "kiro-cli installed in WSL"
+} catch {
+    Write-Warn "kiro-cli is NOT installed inside WSL. KODA requires kiro-cli to function."
+    Write-Warn "Open WSL and install from: https://kiro.dev/docs/cli/install/"
     $reply = Read-Host "Continue anyway? [y/N]"
     if ($reply -ne "y" -and $reply -ne "Y") { exit 1 }
 }

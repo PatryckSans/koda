@@ -64,18 +64,29 @@ if %errorlevel% neq 0 (
 )
 for /f "tokens=*" %%i in ('%PYTHON% --version') do echo [OK] %%i
 
-:: Check kiro-cli
-where kiro-cli >nul 2>&1
+:: Check WSL
+wsl --status >nul 2>&1
+if %errorlevel% neq 0 (
+    color 0C
+    echo [ERROR] WSL is NOT installed. kiro-cli requires WSL to run on Windows.
+    echo [!] Install WSL: wsl --install
+    pause
+    exit /b 1
+)
+echo [OK] WSL available
+
+:: Check kiro-cli inside WSL
+wsl kiro-cli --version >nul 2>&1
 if %errorlevel% neq 0 (
     color 0E
-    echo [!] kiro-cli is NOT installed. KODA requires it to function.
-    echo [!] Install from: https://kiro.dev/docs/cli/install/
+    echo [!] kiro-cli is NOT installed inside WSL. KODA requires it to function.
+    echo [!] Open WSL and install from: https://kiro.dev/docs/cli/install/
     echo.
     set /p CONT="Continue anyway? [y/N]: "
     if /i not "%CONT%"=="y" exit /b 1
     color 0B
 ) else (
-    echo [OK] kiro-cli installed
+    echo [OK] kiro-cli installed in WSL
 )
 
 :: Set paths

@@ -2,9 +2,12 @@
 import subprocess
 import json
 import os
+import sys
 import threading
 import time
 from typing import Dict, Any, Optional, Tuple, Callable
+
+IS_WINDOWS = sys.platform == "win32"
 
 
 class CLIExecutor:
@@ -16,12 +19,18 @@ class CLIExecutor:
         self.chat_output_callback = None
         self.chat_reader_thread = None
     
+    def _build_cmd(self, args: list[str]) -> list[str]:
+        """Build command list, prefixing with 'wsl' on Windows."""
+        if IS_WINDOWS:
+            return ["wsl", self.cli_command] + args
+        return [self.cli_command] + args
+    
     def start_chat_session(self, output_callback: Callable[[str], None], agent: str = None, cwd: str = None) -> bool:
         """Start a persistent kiro-cli chat session"""
         self.stop_chat_session()
         
         try:
-            cmd = [self.cli_command, "chat"]
+            cmd = self._build_cmd(["chat"])
             if agent:
                 cmd += ["--agent", agent]
             
@@ -150,7 +159,7 @@ class CLIExecutor:
         """
         try:
             result = subprocess.run(
-                [self.cli_command] + args,
+                self._build_cmd(args),
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -181,7 +190,7 @@ class CLIExecutor:
         ansi_re = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]')
         try:
             process = subprocess.Popen(
-                [self.cli_command] + args,
+                self._build_cmd(args),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
@@ -220,37 +229,41 @@ class CLIExecutor:
     
     def agent_list(self) -> Tuple[bool, str, Optional[list]]:
         """List available agents. Returns list of (name, is_active) tuples."""
-        import re, pty, os, select
+        import re
         
         try:
-            # Use PTY to trick kiro-cli into thinking it's a terminal
-            master, slave = pty.openpty()
-            process = subprocess.Popen(
-                [self.cli_command, "agent", "list"],
-                stdout=slave,
-                stderr=slave,
-                stdin=slave,
-                close_fds=True
-            )
-            os.close(slave)
-            
-            output = ""
-            while True:
-                r, _, _ = select.select([master], [], [], 5)
-                if r:
-                    try:
-                        data = os.read(master, 4096).decode('utf-8', errors='ignore')
-                        if data:
-                            output += data
-                        else:
+            if IS_WINDOWS:
+                # On Windows, use wsl which provides a TTY
+                result = subprocess.run(
+                    ["wsl", self.cli_command, "agent", "list"],
+                    capture_output=True, text=True, timeout=10
+                )
+                output = result.stdout
+            else:
+                import pty, select
+                master, slave = pty.openpty()
+                process = subprocess.Popen(
+                    [self.cli_command, "agent", "list"],
+                    stdout=slave, stderr=slave, stdin=slave, close_fds=True
+                )
+                os.close(slave)
+                
+                output = ""
+                while True:
+                    r, _, _ = select.select([master], [], [], 5)
+                    if r:
+                        try:
+                            data = os.read(master, 4096).decode('utf-8', errors='ignore')
+                            if data:
+                                output += data
+                            else:
+                                break
+                        except OSError:
                             break
-                    except OSError:
+                    else:
                         break
-                else:
-                    break
-            
-            os.close(master)
-            process.wait(timeout=5)
+                os.close(master)
+                process.wait(timeout=5)
             
             # Strip ANSI codes
             ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
@@ -280,7 +293,7 @@ class CLIExecutor:
         import re
         try:
             result = subprocess.run(
-                [self.cli_command, "chat", "--model", "___invalid___"],
+                self._build_cmd(["chat", "--model", "___invalid___"]),
                 capture_output=True, text=True, timeout=10
             )
             output = result.stdout + result.stderr
@@ -298,31 +311,39 @@ class CLIExecutor:
     
     def chat_list_sessions(self) -> list:
         """List saved sessions. Returns list of (session_id, preview)."""
-        import re, pty, os, select
+        import re
         try:
-            master, slave = pty.openpty()
-            process = subprocess.Popen(
-                [self.cli_command, "chat", "--list-sessions"],
-                stdout=slave, stderr=slave, stdin=slave, close_fds=True
-            )
-            os.close(slave)
-            
-            output = ""
-            while True:
-                r, _, _ = select.select([master], [], [], 10)
-                if r:
-                    try:
-                        data = os.read(master, 4096).decode('utf-8', errors='ignore')
-                        if data:
-                            output += data
-                        else:
+            if IS_WINDOWS:
+                result = subprocess.run(
+                    ["wsl", self.cli_command, "chat", "--list-sessions"],
+                    capture_output=True, text=True, timeout=15
+                )
+                output = result.stdout
+            else:
+                import pty, select
+                master, slave = pty.openpty()
+                process = subprocess.Popen(
+                    [self.cli_command, "chat", "--list-sessions"],
+                    stdout=slave, stderr=slave, stdin=slave, close_fds=True
+                )
+                os.close(slave)
+                
+                output = ""
+                while True:
+                    r, _, _ = select.select([master], [], [], 10)
+                    if r:
+                        try:
+                            data = os.read(master, 4096).decode('utf-8', errors='ignore')
+                            if data:
+                                output += data
+                            else:
+                                break
+                        except OSError:
                             break
-                    except OSError:
+                    else:
                         break
-                else:
-                    break
-            os.close(master)
-            process.wait(timeout=5)
+                os.close(master)
+                process.wait(timeout=5)
             
             ansi = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
             clean = ansi.sub('', output)
