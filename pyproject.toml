@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "koda"
+version = "0.1.0"
+description = "KODA | Kiro Operator Dashboard Application"
+requires-python = ">=3.8"
+dependencies = [
+    "textual>=0.47.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+koda = "kiro_tui.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kiro_tui*"]
