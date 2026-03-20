@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Install KODA
+Comment=Install KODA - Kiro Operator Dashboard Application
+Exec=bash -c 'curl -sSL https://raw.githubusercontent.com/PatryckSans/koda/main/install.sh | bash; echo ""; echo "Press Enter to close..."; read'
+Terminal=true
+Type=Application
+Categories=Development;
+Icon=system-software-install
