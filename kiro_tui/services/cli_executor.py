@@ -114,6 +114,13 @@ class CLIExecutor:
                 if not r:
                     if self.chat_process and self.chat_process.poll() is not None:
                         break
+                    # Check if tools collection timed out (1s after last Total)
+                    if self._collecting_tools and hasattr(self, '_tools_last_total_time'):
+                        if time.time() - self._tools_last_total_time > 1.0:
+                            self._collecting_tools = False
+                            if self._tools_ready_callback:
+                                self._tools_ready_callback()
+                                self._tools_ready_callback = None
                     continue
                 try:
                     data = os.read(self._pty_master, 4096).decode('utf-8', errors='replace')
@@ -166,7 +173,7 @@ class CLIExecutor:
                 self.chat_output_callback(f"Error: {e}")
 
     # Prompt line pattern: "6% > ..." or "12% > ..."
-    _PROMPT_RE = re.compile(r'^\d+%\s*>')
+    _PROMPT_RE = re.compile(r'^(?:\[.*?\]\s*)?\d+%\s*>')
     _TOOL_LINE_RE = re.compile(r'^-\s+(\w+)\s+')
 
     def _process_line(self, raw: str):
@@ -177,7 +184,11 @@ class CLIExecutor:
 
         # Filter prompt lines (e.g. "6% > ", "7% > Not sure where to start?")
         if self._PROMPT_RE.match(line):
-            self._collecting_tools = False
+            if self._collecting_tools:
+                self._collecting_tools = False
+                if self._tools_ready_callback:
+                    self._tools_ready_callback()
+                    self._tools_ready_callback = None
             # Extract context percentage for status bar
             m = re.match(r'(\d+)%', line)
             if m:
@@ -234,18 +245,20 @@ class CLIExecutor:
             self._collecting_tools = True
             self._cached_tools = []
             return
-        if line.startswith("Total") and self._collecting_tools:
-            self._collecting_tools = False
-            if self._tools_ready_callback:
-                self._tools_ready_callback()
-                self._tools_ready_callback = None
-            return
-        m_tool = self._TOOL_LINE_RE.match(line)
-        if m_tool and self._collecting_tools:
-            name = m_tool.group(1)
-            trusted = "not trusted" not in line
-            self._cached_tools.append((name, trusted))
-            return
+        if self._collecting_tools:
+            if line.startswith("Total"):
+                # Schedule callback — more sections may follow, but prompt ends collection
+                self._tools_last_total_time = time.time()
+                return
+            m_tool = self._TOOL_LINE_RE.match(line)
+            if m_tool:
+                name = m_tool.group(1)
+                trusted = "not trusted" not in line
+                self._cached_tools.append((name, trusted))
+                return
+            # MCP section headers like "server-name (MCP)"
+            if "(MCP)" in line:
+                return
 
         # Trust picker detection
         if "navigate" in line.lower() and "select" in line.lower():
