@@ -175,8 +175,10 @@ class CLIExecutor:
         if self._PROMPT_RE.match(line):
             # Extract context percentage for status bar
             m = re.match(r'(\d+)%', line)
-            if m and self._context_callback:
-                self._context_callback(float(m.group(1)))
+            if m:
+                self._last_context_pct = float(m.group(1))
+                if self._context_callback:
+                    self._context_callback(self._last_context_pct)
             return
 
         # Filter echo of sent messages (exact match or fragment)
@@ -493,10 +495,12 @@ class CLIExecutor:
             return []
 
     def poll_context(self, callback: Callable[[float], None]):
-        if not self.chat_process or self.chat_process.poll() is not None:
-            return
-        self._context_callback = callback
-        self.send_chat_message("/context")
+        """Return cached context percentage from prompt lines."""
+        pct = getattr(self, '_last_context_pct', None)
+        if pct is not None:
+            callback(pct)
+        else:
+            self._context_callback = callback
 
     # ── Prompts ─────────────────────────────────────────────────────
 
