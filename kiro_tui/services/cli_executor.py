@@ -300,11 +300,6 @@ class CLIExecutor:
             line = line[2:]
             display = re.sub(r'^(?:\x1b\[\d*(?:;\d+)*m)*>\s', '', display)
 
-        # Strip markdown heading prefixes (### etc.) — kiro-cli already applies bold ANSI
-        if re.match(r'^#{1,6}\s', line):
-            line = re.sub(r'^#{1,6}\s+', '', line)
-            display = re.sub(r'#{1,6}\s+', '', display, count=1)
-
         if self.chat_output_callback:
             self._in_response = True
             self.chat_output_callback(display)
