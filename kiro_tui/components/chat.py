@@ -47,7 +47,7 @@ class ActionPrompt(Container):
         self.text = text
 
     def compose(self) -> ComposeResult:
-        yield Static(self.text, classes="action-text")
+        yield Static(self.text, classes="action-text", markup=False)
         with Horizontal(classes="action-buttons"):
             yield Button(t("action_yes"), variant="success", id="action-y")
             yield Button(t("action_no"), variant="error", id="action-n")
@@ -149,8 +149,7 @@ class ChatMessage(Static):
     """
     
     def __init__(self, content: str, role: str = "user"):
-        # Escape Rich markup so [text] isn't interpreted as tags
-        super().__init__(content.replace("[", "\\["))
+        super().__init__(content, markup=False)
         self.add_class(role)
 
 
