@@ -98,8 +98,11 @@ class CLIExecutor:
                 self.chat_reader_thread = threading.Thread(
                     target=self._read_chat_pipe, daemon=True)
             else:
-                import pty
+                import pty, struct, fcntl, termios
                 master, slave = pty.openpty()
+                # Set PTY to wide terminal so kiro-cli doesn't wrap/break lines
+                fcntl.ioctl(slave, termios.TIOCSWINSZ,
+                            struct.pack('HHHH', 50, 500, 0, 0))
                 self._pty_master = master
                 self.chat_process = subprocess.Popen(
                     [self.cli_command] + args,
