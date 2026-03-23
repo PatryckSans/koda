@@ -1,258 +1,325 @@
-"""CLI Executor - Executes kiro-cli commands via subprocess"""
+"""CLI Executor - Executes kiro-cli commands via subprocess with PTY support"""
 import subprocess
 import json
 import os
 import sys
+import re
 import threading
 import time
-from typing import Dict, Any, Optional, Tuple, Callable
+from typing import Dict, Any, Optional, Tuple, Callable, List
 
 IS_WINDOWS = sys.platform == "win32"
 
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\[[\d;]*m')
+
 
 class CLIExecutor:
-    """Executes kiro-cli commands and parses outputs"""
-    
+    """Executes kiro-cli commands via PTY for full interactive support"""
+
     def __init__(self, cli_command: str = "kiro-cli"):
         self.cli_command = cli_command
         self.chat_process = None
         self.chat_output_callback = None
         self.chat_reader_thread = None
-    
-    def _build_cmd(self, args: list[str]) -> list[str]:
-        """Build command list, prefixing with 'wsl' on Windows."""
+        self._pty_master = None
+        self._last_sent = None  # for echo filtering
+        self._context_callback = None
+
+    def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
             return ["wsl", self.cli_command] + args
         return [self.cli_command] + args
 
+    def _build_chat_cmd(self, agent=None, model=None, trusted_tools=None) -> list:
+        """Build chat command with standard flags."""
+        args = ["chat", "--legacy-ui", "--wrap", "never"]
+        if agent:
+            args += ["--agent", agent]
+        if model and model != "auto":
+            args += ["--model", model]
+        if trusted_tools:
+            args += ["--trust-tools", ",".join(trusted_tools)]
+        return args
+
     @staticmethod
-    def _is_spinner_line(line: str) -> bool:
-        """Check if line is a spinner/progress/login noise line."""
+    def _clean(text: str) -> str:
+        return ANSI_RE.sub('', text).strip()
+
+    @staticmethod
+    def _is_noise(line: str) -> bool:
+        """Filter spinner, banner, box drawing, metadata lines."""
         if not line:
             return True
-        # Braille spinner chars (U+2800-U+28FF)
-        if line[0] in "⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⢀⢁⣀⣁⣠⣡⣤⣥⣦⣧⣨⣩⣴⣵⣶⣷⣸⣹⣼⣽⣾⣿":
+        c = line[0]
+        # Braille spinner chars
+        if '\u2800' <= c <= '\u28ff' or '\u2840' <= c <= '\u28ff':
             return True
-        for kw in ("Logging in", "Opening browser", "▰", "▱", "Logging out"):
-            if kw in line:
-                return True
-        return False
-    
-    def start_chat_session(self, output_callback: Callable[[str], None], agent: str = None, cwd: str = None) -> bool:
-        """Start a persistent kiro-cli chat session"""
+        # Box drawing, decorations
+        if c in "╭╰│╮╯─▔▸":
+            return True
+        noise_kw = ("Logging in", "Logging out", "Opening browser", "▰", "▱",
+                     "Did you know", "Model:", "Pro Tips", "/compact",
+                     "/context show", "Run /clear")
+        return any(kw in line for kw in noise_kw)
+
+    # ── Chat session (PTY) ──────────────────────────────────────────
+
+    def start_chat_session(self, output_callback: Callable[[str], None],
+                           agent=None, model=None, trusted_tools=None, cwd=None) -> bool:
+        """Start chat session using PTY for full interactive support."""
         self.stop_chat_session()
-        
         try:
-            cmd = self._build_cmd(["chat"])
-            if agent:
-                cmd += ["--agent", agent]
-            
-            self.chat_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                cwd=cwd,
-                encoding='utf-8',
-                errors='replace'
-            )
-            
+            args = self._build_chat_cmd(agent, model, trusted_tools)
             self.chat_output_callback = output_callback
-            
-            # Start thread to read output
-            self.chat_reader_thread = threading.Thread(
-                target=self._read_chat_output,
-                daemon=True
-            )
+
+            if IS_WINDOWS:
+                # Use wsl script to allocate PTY inside WSL
+                inner = f"{self.cli_command} {' '.join(args)}"
+                cmd = ["wsl", "script", "-qc", inner, "/dev/null"]
+                self.chat_process = subprocess.Popen(
+                    cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, encoding='utf-8', errors='replace'
+                )
+                self.chat_reader_thread = threading.Thread(
+                    target=self._read_chat_pipe, daemon=True)
+            else:
+                import pty
+                master, slave = pty.openpty()
+                self._pty_master = master
+                self.chat_process = subprocess.Popen(
+                    [self.cli_command] + args,
+                    stdin=slave, stdout=slave, stderr=slave,
+                    close_fds=True, cwd=cwd
+                )
+                os.close(slave)
+                self.chat_reader_thread = threading.Thread(
+                    target=self._read_chat_pty, daemon=True)
+
             self.chat_reader_thread.start()
-            
             return True
-            
         except Exception as e:
-            output_callback(f"Error starting chat: {str(e)}")
+            output_callback(f"Error starting chat: {e}")
             return False
-    
-    def _read_chat_output(self):
-        """Read chat output in background thread"""
-        import re
-        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-        
+
+    def _read_chat_pty(self):
+        """Read from PTY master fd (Linux)."""
+        import select
+        buf = ""
         try:
-            buffer = ""
-            
-            while self.chat_process.poll() is None:
-                char = self.chat_process.stdout.read(1)
-                if not char:
-                    break
-                
-                if char == '\r':
-                    buffer = ""
+            while True:
+                r, _, _ = select.select([self._pty_master], [], [], 0.5)
+                if not r:
+                    if self.chat_process and self.chat_process.poll() is not None:
+                        break
                     continue
-                
-                if char == '\n':
-                    line = ansi_escape.sub('', buffer).strip()
-                    buffer = ""
-                    
-                    if not line:
-                        continue
-                    
-                    # Check if context output line (always filter, no flag needed)
-                    if ("% used" in line or "Context window" in line or
-                        "Pro Tips" in line or "% (estimated)" in line or
-                        "/compact" in line or "/context show" in line or
-                        "Run /clear" in line or
-                        (line and "%" in line and ("█" in line or "░" in line))):
-                        import re as _re
-                        m = _re.search(r'([\d.]+)%\s*used', line)
-                        if m and getattr(self, '_context_callback', None):
-                            self._context_callback(float(m.group(1)))
-                            self._context_callback = None
-                        continue
-                    
-                    # Skip spinner/thinking lines
-                    if "Thinking" in line:
-                        if "> " in line:
-                            resp = line.split("> ", 1)[1].strip()
-                            if resp and self.chat_output_callback:
-                                self.chat_output_callback(resp)
-                        continue
-                    
-                    # Skip banner, box drawing, metadata
-                    if (line and line[0] in "⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⢀⢁⣀⣁⣠⣡⣤⣥⣦⣧⣨⣩⣴⣵⣶⣷⣸⣹⣼⣽⣾⣿╭╰│╮╯─▔" or
-                        "Did you know" in line or
-                        "Model:" in line or
-                        "▸" in line or
-                        line.startswith(">")):
-                        continue
-                    
-                    # Strip invisible chars
-                    line = line.replace('\x1b[?25h', '').replace('\x1b[?25l', '').strip()
-                    if not line:
-                        continue
-                    
-                    if self.chat_output_callback and not getattr(self, '_capturing_tools', False):
-                        self.chat_output_callback(line)
-                else:
-                    buffer += char
-                        
+                try:
+                    data = os.read(self._pty_master, 4096).decode('utf-8', errors='replace')
+                except OSError:
+                    break
+                if not data:
+                    break
+                buf += data
+                while '\n' in buf:
+                    line, buf = buf.split('\n', 1)
+                    self._process_line(line)
+                # Check for prompts that don't end with \n (trust picker)
+                clean = self._clean(buf)
+                if 'navigate' in clean.lower() and 'select' in clean.lower():
+                    self._process_line(buf)
+                    buf = ""
         except Exception as e:
             if self.chat_output_callback:
-                self.chat_output_callback(f"Error: {str(e)}")
-    
-    def send_chat_message(self, message: str) -> bool:
-        """Send a message to the active chat session"""
-        if not self.chat_process or self.chat_process.poll() is not None:
-            return False
-        
+                self.chat_output_callback(f"Error: {e}")
+
+    def _read_chat_pipe(self):
+        """Read from pipe stdout (Windows/WSL script)."""
         try:
-            self.chat_process.stdin.write(message + "\n")
-            self.chat_process.stdin.flush()
-            return True
+            buf = ""
+            while self.chat_process.poll() is None:
+                ch = self.chat_process.stdout.read(1)
+                if not ch:
+                    break
+                if ch == '\r':
+                    buf = ""
+                    continue
+                if ch == '\n':
+                    self._process_line(buf)
+                    buf = ""
+                else:
+                    buf += ch
+        except Exception as e:
+            if self.chat_output_callback:
+                self.chat_output_callback(f"Error: {e}")
+
+    def _process_line(self, raw: str):
+        """Process a single line of chat output."""
+        line = self._clean(raw)
+        if not line:
+            return
+
+        # Filter echo of sent messages
+        if self._last_sent and line.rstrip() == self._last_sent.rstrip():
+            self._last_sent = None
+            return
+        # Filter lines that look like input echo (prompt prefix + our text)
+        if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
+            sent = self._last_sent.rstrip()
+            after = line.split(sent, 1)[-1].strip()
+            if not after:
+                self._last_sent = None
+                return
+
+        # Context usage capture
+        if "% used" in line or "Context window" in line:
+            m = re.search(r'([\d.]+)%\s*used', line)
+            if m and self._context_callback:
+                self._context_callback(float(m.group(1)))
+                self._context_callback = None
+            return
+        if any(kw in line for kw in ("% (estimated)", "Run /clear")):
+            return
+
+        # Spinner/thinking
+        if "Thinking" in line:
+            if "> " in line:
+                resp = line.split("> ", 1)[1].strip()
+                if resp and self.chat_output_callback:
+                    self.chat_output_callback(resp)
+            return
+
+        # Noise filter
+        if self._is_noise(line):
+            return
+
+        # Trust picker detection
+        if "navigate" in line.lower() and "select" in line.lower():
+            if self.chat_output_callback:
+                self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
+            return
+
+        # Trust option lines (> Full command → ...)
+        if line.startswith(">") and "→" in line:
+            if self.chat_output_callback:
+                self.chat_output_callback(f"__TRUST_OPTION__:{line}")
+            return
+        if "→" in line and any(kw in line for kw in ("command", "Tool", "paths", "directory")):
+            if self.chat_output_callback:
+                self.chat_output_callback(f"__TRUST_OPTION__:{line}")
+            return
+
+        if self.chat_output_callback:
+            self.chat_output_callback(line)
+
+    def send_chat_message(self, message: str) -> bool:
+        """Send message to chat session."""
+        self._last_sent = message
+        try:
+            if self._pty_master is not None:
+                os.write(self._pty_master, (message + "\n").encode('utf-8'))
+                return True
+            elif self.chat_process and self.chat_process.poll() is None:
+                self.chat_process.stdin.write(message + "\n")
+                self.chat_process.stdin.flush()
+                return True
         except Exception:
-            return False
-    
+            pass
+        return False
+
+    def send_raw(self, data: bytes) -> bool:
+        """Send raw bytes (escape sequences for trust picker)."""
+        try:
+            if self._pty_master is not None:
+                os.write(self._pty_master, data)
+                return True
+            elif self.chat_process and self.chat_process.poll() is None:
+                self.chat_process.stdin.buffer.write(data)
+                self.chat_process.stdin.flush()
+                return True
+        except Exception:
+            pass
+        return False
+
     def stop_chat_session(self):
-        """Stop the chat session"""
+        if self._pty_master is not None:
+            try:
+                os.close(self._pty_master)
+            except OSError:
+                pass
+            self._pty_master = None
         if self.chat_process:
             try:
-                self.chat_process.stdin.close()
+                if self.chat_process.stdin and not self.chat_process.stdin.closed:
+                    self.chat_process.stdin.close()
                 self.chat_process.terminate()
                 self.chat_process.wait(timeout=2)
             except Exception:
-                self.chat_process.kill()
+                try:
+                    self.chat_process.kill()
+                except Exception:
+                    pass
             finally:
                 self.chat_process = None
-    
-    def execute(self, args: list[str], parse_json: bool = False) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
-        """
-        Execute a kiro-cli command
-        
-        Returns:
-            Tuple of (success, output_text, parsed_json)
-        """
+
+    # ── Non-chat commands ───────────────────────────────────────────
+
+    def execute(self, args: list, parse_json=False) -> Tuple[bool, str, Optional[Dict]]:
         try:
             result = subprocess.run(
-                self._build_cmd(args),
-                capture_output=True,
-                text=True,
-                timeout=30,
-                encoding='utf-8',
-                errors='replace'
+                self._build_cmd(args), capture_output=True, text=True,
+                timeout=30, encoding='utf-8', errors='replace'
             )
-            
             output = result.stdout.strip()
-            success = result.returncode == 0
-            
             parsed = None
             if parse_json and output:
                 try:
                     parsed = json.loads(output)
                 except json.JSONDecodeError:
                     pass
-            
-            return success, output, parsed
-            
+            return result.returncode == 0, output, parsed
         except subprocess.TimeoutExpired:
             return False, "Command timed out", None
         except FileNotFoundError:
             return False, f"Command '{self.cli_command}' not found", None
         except Exception as e:
-            return False, f"Error: {str(e)}", None
-    
-    def execute_interactive(self, args: list[str], output_callback: Callable[[str], None]):
-        """Execute an interactive command and stream output, filtering spinners"""
-        import re
-        ansi_re = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]')
+            return False, f"Error: {e}", None
+
+    def execute_interactive(self, args: list, output_callback: Callable[[str], None]):
         try:
             process = subprocess.Popen(
-                self._build_cmd(args),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE,
-                text=True,
-                bufsize=0,
-                encoding='utf-8',
-                errors='replace'
+                self._build_cmd(args), stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
+                text=True, bufsize=0, encoding='utf-8', errors='replace'
             )
-            
-            buffer = ""
+            buf = ""
             while True:
-                char = process.stdout.read(1)
-                if not char:
+                ch = process.stdout.read(1)
+                if not ch:
                     break
-                if char == '\r':
-                    buffer = ""
+                if ch == '\r':
+                    buf = ""
                     continue
-                if char == '\n':
-                    line = ansi_re.sub('', buffer).strip()
-                    if line and not self._is_spinner_line(line):
+                if ch == '\n':
+                    line = self._clean(buf)
+                    if line and not self._is_noise(line):
                         output_callback(line)
-                    buffer = ""
+                    buf = ""
                 else:
-                    buffer += char
-            
-            # Flush remaining buffer
-            if buffer:
-                line = ansi_re.sub('', buffer).strip()
-                if line and not self._is_spinner_line(line):
+                    buf += ch
+            if buf:
+                line = self._clean(buf)
+                if line and not self._is_noise(line):
                     output_callback(line)
-            
             process.wait()
             return process.returncode == 0
-            
         except Exception as e:
-            output_callback(f"Error: {str(e)}")
+            output_callback(f"Error: {e}")
             return False
-    
+
+    # ── Agent management ────────────────────────────────────────────
+
     def agent_list(self) -> Tuple[bool, str, Optional[list]]:
-        """List available agents. Returns list of (name, is_active) tuples."""
-        import re
-        
         try:
             if IS_WINDOWS:
-                # Use 'wsl -e bash -lic' to get a login shell with TTY-like behavior
                 result = subprocess.run(
                     ["wsl", "bash", "-lic", f"{self.cli_command} agent list"],
                     capture_output=True, text=True, timeout=10,
@@ -262,12 +329,11 @@ class CLIExecutor:
             else:
                 import pty, select
                 master, slave = pty.openpty()
-                process = subprocess.Popen(
+                proc = subprocess.Popen(
                     [self.cli_command, "agent", "list"],
                     stdout=slave, stderr=slave, stdin=slave, close_fds=True
                 )
                 os.close(slave)
-                
                 output = ""
                 while True:
                     r, _, _ = select.select([master], [], [], 5)
@@ -283,12 +349,9 @@ class CLIExecutor:
                     else:
                         break
                 os.close(master)
-                process.wait(timeout=5)
-            
-            # Strip ANSI codes
-            ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-            clean = ansi_escape.sub('', output)
-            
+                proc.wait(timeout=5)
+
+            clean = ANSI_RE.sub('', output)
             agents = []
             for line in clean.split('\n'):
                 m = re.match(r'^([* ]) (.+?)  {2,}', line)
@@ -297,42 +360,54 @@ class CLIExecutor:
                     name = m.group(2).strip()
                     if name:
                         agents.append((name, is_active))
-            
             return True, clean, agents
-            
         except Exception as e:
             return False, str(e), None
-    
+
     def agent_swap(self, agent_name: str) -> Tuple[bool, str]:
-        """Swap to a different agent"""
         success, output, _ = self.execute(["agent", "swap", agent_name])
         return success, output
-    
+
+    # ── Model management ────────────────────────────────────────────
+
     def model_list(self) -> Tuple[bool, list]:
-        """List available models by triggering error with invalid model"""
-        import re
+        """List models using --list-models --format json."""
+        try:
+            result = subprocess.run(
+                self._build_cmd(["chat", "--list-models", "--format", "json"]),
+                capture_output=True, text=True, timeout=10,
+                encoding='utf-8', errors='replace'
+            )
+            data = json.loads(result.stdout)
+            models = [m.get("model_name", m.get("name", ""))
+                      for m in data.get("models", [])]
+            if models:
+                return True, models
+        except Exception:
+            pass
+        return self._model_list_fallback()
+
+    def _model_list_fallback(self) -> Tuple[bool, list]:
+        """Fallback: parse error message from invalid model."""
         try:
             result = subprocess.run(
                 self._build_cmd(["chat", "--model", "___invalid___"]),
                 capture_output=True, text=True, timeout=10,
                 encoding='utf-8', errors='replace'
             )
-            output = result.stdout + result.stderr
-            m = re.search(r'Available models: (.+)', output)
+            m = re.search(r'Available models: (.+)', result.stdout + result.stderr)
             if m:
-                models = [x.strip() for x in m.group(1).split(',')]
-                return True, models
-            return False, []
+                return True, [x.strip() for x in m.group(1).split(',')]
         except Exception:
-            return False, []
-    
+            pass
+        return False, []
+
+    # ── Chat management ─────────────────────────────────────────────
+
     def chat_save(self, name: str) -> Tuple[bool, str]:
-        """Save current chat by sending /save command"""
         return self.send_chat_message(f"/save {name}"), name
-    
+
     def chat_list_sessions(self) -> list:
-        """List saved sessions. Returns list of (session_id, preview)."""
-        import re
         try:
             if IS_WINDOWS:
                 result = subprocess.run(
@@ -344,12 +419,11 @@ class CLIExecutor:
             else:
                 import pty, select
                 master, slave = pty.openpty()
-                process = subprocess.Popen(
+                proc = subprocess.Popen(
                     [self.cli_command, "chat", "--list-sessions"],
                     stdout=slave, stderr=slave, stdin=slave, close_fds=True
                 )
                 os.close(slave)
-                
                 output = ""
                 while True:
                     r, _, _ = select.select([master], [], [], 10)
@@ -365,11 +439,9 @@ class CLIExecutor:
                     else:
                         break
                 os.close(master)
-                process.wait(timeout=5)
-            
-            ansi = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
-            clean = ansi.sub('', output)
-            
+                proc.wait(timeout=5)
+
+            clean = ANSI_RE.sub('', output)
             sessions = []
             current_id = None
             for line in clean.split('\n'):
@@ -384,20 +456,16 @@ class CLIExecutor:
             return sessions
         except Exception:
             return []
-    
+
     def poll_context(self, callback: Callable[[float], None]):
-        """Send /context and capture usage percentage."""
         if not self.chat_process or self.chat_process.poll() is not None:
             return
         self._context_callback = callback
-        try:
-            self.chat_process.stdin.write("/context\n")
-            self.chat_process.stdin.flush()
-        except Exception:
-            pass
-    
-    def prompt_list(self, project_path: str = None) -> list:
-        """List prompts from local and global dirs. Returns [(name, source)]."""
+        self.send_chat_message("/context")
+
+    # ── Prompts ─────────────────────────────────────────────────────
+
+    def prompt_list(self, project_path=None) -> list:
         prompts = {}
         global_dir = os.path.expanduser("~/.kiro/prompts")
         if os.path.isdir(global_dir):
@@ -412,16 +480,14 @@ class CLIExecutor:
                         prompts[f[:-3]] = "local"
         return sorted(prompts.items())
 
-    def prompt_create(self, name: str, content: str, project_path: str = None, is_global: bool = False) -> bool:
-        """Create a prompt .md file."""
+    def prompt_create(self, name, content, project_path=None, is_global=False):
         base = os.path.expanduser("~/.kiro/prompts") if is_global else os.path.join(project_path or ".", ".kiro", "prompts")
         os.makedirs(base, exist_ok=True)
         with open(os.path.join(base, f"{name}.md"), "w") as f:
             f.write(content)
         return True
 
-    def prompt_remove(self, name: str, project_path: str = None, is_global: bool = False) -> bool:
-        """Remove a prompt .md file."""
+    def prompt_remove(self, name, project_path=None, is_global=False):
         base = os.path.expanduser("~/.kiro/prompts") if is_global else os.path.join(project_path or ".", ".kiro", "prompts")
         path = os.path.join(base, f"{name}.md")
         if os.path.exists(path):
@@ -429,32 +495,30 @@ class CLIExecutor:
             return True
         return False
 
-    def prompt_read(self, name: str, project_path: str = None) -> tuple:
-        """Read prompt content. Returns (content, is_global)."""
+    def prompt_read(self, name, project_path=None):
         if project_path:
             local = os.path.join(project_path, ".kiro", "prompts", f"{name}.md")
             if os.path.exists(local):
                 return open(local).read(), False
-        glob = os.path.join(os.path.expanduser("~/.kiro/prompts"), f"{name}.md")
-        if os.path.exists(glob):
-            return open(glob).read(), True
+        g = os.path.join(os.path.expanduser("~/.kiro/prompts"), f"{name}.md")
+        if os.path.exists(g):
+            return open(g).read(), True
         return "", False
 
-    def login_interactive(self, output_callback: Callable[[str], None], license: str = None, identity_provider: str = None, region: str = None) -> bool:
-        """Login using interactive flow with device flow"""
+    # ── Auth ────────────────────────────────────────────────────────
+
+    def login_interactive(self, output_callback, license=None, identity_provider=None, region=None):
         args = ["login", "--use-device-flow"]
         if identity_provider:
             args += ["--identity-provider", identity_provider]
         if region:
             args += ["--region", region]
         return self.execute_interactive(args, output_callback)
-    
-    def logout(self) -> Tuple[bool, str]:
-        """Logout from Kiro CLI"""
+
+    def logout(self):
         success, output, _ = self.execute(["logout"])
         return success, output
-    
-    def whoami(self) -> Tuple[bool, str]:
-        """Check current login status"""
+
+    def whoami(self):
         success, output, _ = self.execute(["whoami"])
         return success, output

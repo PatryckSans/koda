@@ -61,7 +61,52 @@ class ActionPrompt(Container):
             btn.disabled = True
 
 
-class ChatMessage(Static):
+class TrustPicker(Container):
+    """Trust scope picker - shows options from kiro-cli granular trust"""
+
+    DEFAULT_CSS = """
+    TrustPicker {
+        width: 100%;
+        height: auto;
+        background: #4a3800;
+        padding: 1;
+        border: heavy $warning;
+    }
+    TrustPicker .picker-title {
+        color: #ffffff;
+        text-style: bold;
+        width: 100%;
+        margin-bottom: 1;
+    }
+    TrustPicker Button {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+    TrustPicker Button:hover {
+        text-style: bold reverse;
+    }
+    """
+
+    class TrustSelected(Message):
+        def __init__(self, index: int):
+            super().__init__()
+            self.index = index
+
+    def __init__(self, options: list):
+        super().__init__()
+        self.options = options  # list of (label, detail) tuples
+
+    def compose(self) -> ComposeResult:
+        yield Static("Select trust scope:", classes="picker-title")
+        for i, (label, detail) in enumerate(self.options):
+            text = f"{label} -> {detail}" if detail else label
+            yield Button(text, variant="warning", id=f"trust-{i}")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        idx = int(event.button.id.split("-")[1])
+        self.post_message(self.TrustSelected(idx))
+        for btn in self.query(Button):
+            btn.disabled = True
     """Single chat message"""
     
     DEFAULT_CSS = """

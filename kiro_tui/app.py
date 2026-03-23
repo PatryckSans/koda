@@ -3,7 +3,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Footer, ListView, ListItem, Input, Label, Button, Checkbox
 from textual.screen import ModalScreen, Screen
 from kiro_tui.components.sidebar import Sidebar, AgentsSection, ChatSection, AuthSection, ModelsSection, PromptsSection
-from kiro_tui.components.chat import ChatArea, ActionPrompt
+from kiro_tui.components.chat import ChatArea, ActionPrompt, TrustPicker
 from kiro_tui.components.status_bar import StatusBar
 from kiro_tui.services.agent_manager import AgentManager
 from kiro_tui.services.cli_executor import CLIExecutor
@@ -387,7 +387,7 @@ class KodaApp(App):
         chat.add_log(t("starting_chat"))
         
         import time
-        success = self.cli_executor.start_chat_session(self._chat_output_handler, cwd=path)
+        success = self._start_chat()
         time.sleep(1)
         
         if success and self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None:
@@ -400,9 +400,6 @@ class KodaApp(App):
     
     def _chat_output_handler(self, line: str):
         """Handle chat output: display message and reset status to ready."""
-        # Filter spinner/progress lines
-        if CLIExecutor._is_spinner_line(line):
-            return
         # Deduplicate consecutive identical messages
         if line == getattr(self, '_last_chat_line', None):
             return
@@ -410,6 +407,26 @@ class KodaApp(App):
 
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
+
+        # Trust picker detection
+        if line.startswith("__TRUST_PICKER__:"):
+            self._trust_options = []
+            return
+        if line.startswith("__TRUST_OPTION__:"):
+            opt = line[len("__TRUST_OPTION__:"):]
+            # Parse "  Full command → git pull --rebase" or "> Full command → ..."
+            opt = opt.lstrip("> ").strip()
+            if "→" in opt:
+                label, detail = opt.split("→", 1)
+                self._trust_options.append((label.strip(), detail.strip()))
+            else:
+                self._trust_options.append((opt, ""))
+            # Show picker after collecting options (small delay via timer)
+            if hasattr(self, '_trust_timer'):
+                self._trust_timer.stop()
+            self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
+            return
+
         role = "assistant"
         if "Allow this action" in line or "[y/n" in line:
             role = "action"
@@ -422,12 +439,8 @@ class KodaApp(App):
             self.call_from_thread(self.query_one(StatusBar).set_context, pct)
         self.cli_executor.poll_context(on_context)
     
-    # Known built-in tools
-    BUILTIN_TOOLS = [
-        "fs_read", "fs_write", "execute_bash", "grep", "glob", "code",
-        "web_search", "web_fetch", "knowledge", "todo_list", "use_aws",
-        "use_subagent", "delegate", "report_issue", "thinking", "introspect",
-    ]
+    # Known built-in tools (kiro-cli 1.27+)
+    BUILTIN_TOOLS = ["read", "write", "shell", "aws", "report"]
 
     def action_toggle_tools(self):
         """Show tools modal with toggles"""
@@ -472,55 +485,32 @@ class KodaApp(App):
     def _on_tools_result(self, result: dict):
         if not result:
             return
-        
-        # Save trusted state and build list
         self._trusted_tools = {name for name, on in result.items() if on}
-        trusted = list(self._trusted_tools)
-        
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
-        
-        # Restart chat with new trust settings
-        chat.add_log(f"🔧 Updating tool permissions...")
-        self.cli_executor.stop_chat_session()
-        
-        import time
+        chat.add_log("Updating tool permissions...")
+        self.run_worker(self._restart_chat(chat, status))
+
+    def _start_chat(self):
+        """Centralized chat startup using cli_executor PTY method."""
         agent = self.agent_manager.active_agent
         model = getattr(self, 'active_model', 'auto')
-        
-        def start_with_tools():
-            cmd = self.cli_executor._build_cmd(["chat"])
-            if agent:
-                cmd += ["--agent", agent]
-            if model != "auto":
-                cmd += ["--model", model]
-            if trusted:
-                cmd += ["--trust-tools", ",".join(trusted)]
-            
-            import subprocess, threading
-            self.cli_executor.chat_process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE, text=True, bufsize=1,
-                cwd=self.project_path,
-                encoding='utf-8', errors='replace'
-            )
-            self.cli_executor.chat_output_callback = self._chat_output_handler
-            self.cli_executor.chat_reader_thread = threading.Thread(
-                target=self.cli_executor._read_chat_output, daemon=True
-            )
-            self.cli_executor.chat_reader_thread.start()
+        trusted = list(getattr(self, '_trusted_tools', []))
+        return self.cli_executor.start_chat_session(
+            self._chat_output_handler,
+            agent=agent, model=model,
+            trusted_tools=trusted or None,
+            cwd=self.project_path
+        )
+
+    async def _restart_chat(self, chat, status):
+        import time
+        def do_restart():
+            self._start_chat()
             time.sleep(2)
-            p = self.cli_executor.chat_process
-            return p is not None and p.poll() is None
-        
-        self.run_worker(self._restart_with_tools(start_with_tools, chat, status))
-    
-    async def _restart_with_tools(self, start_fn, chat, status):
-        success = await self.run_in_thread(start_fn)
-        if success:
-            status.set_status(t("ready"))
-        else:
-            status.set_status(t("error"))
+            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
+        success = await self.run_in_thread(do_restart)
+        status.set_status(t("ready") if success else t("error"))
     
     def on_unmount(self):
         """Clean up chat session when app closes"""
@@ -530,6 +520,23 @@ class KodaApp(App):
         """Handle y/n/t button click on action prompts"""
         self.cli_executor.send_chat_message(event.response)
         self.query_one(StatusBar).set_status(t("thinking") if event.response != "n" else t("ready"))
+
+    def _show_trust_picker(self):
+        """Show trust picker options as buttons in chat."""
+        options = getattr(self, '_trust_options', [])
+        if options:
+            chat = self.query_one(ChatArea)
+            messages = chat.query_one("#messages")
+            messages.mount(TrustPicker(options))
+            messages.scroll_end(animate=False)
+
+    def on_trust_picker_trust_selected(self, event: TrustPicker.TrustSelected):
+        """Handle trust scope selection - send arrow downs + Enter."""
+        # Navigate to selected option: N arrow-downs then Enter
+        for _ in range(event.index):
+            self.cli_executor.send_raw(b'\x1b[B')  # arrow down
+        self.cli_executor.send_raw(b'\r')  # Enter
+        self.query_one(StatusBar).set_status(t("thinking"))
 
     def on_chat_area_message_submitted(self, event: ChatArea.MessageSubmitted):
         """Handle chat message submission"""
@@ -607,7 +614,6 @@ class KodaApp(App):
     
     async def handle_agent_selection(self, label_text: str):
         """Handle agent selection from sidebar"""
-        # Remove active badge if present
         agent_name = label_text.replace("● ", "").strip()
         
         chat = self.query_one(ChatArea)
@@ -616,15 +622,13 @@ class KodaApp(App):
         status.set_status(t("switching_agent", name=agent_name))
         chat.add_log(t("switching_agent", name=agent_name))
         
-        # Stop current chat and restart with new agent
-        self.cli_executor.stop_chat_session()
+        self.agent_manager.active_agent = agent_name
         
         import time
         def start_new():
-            success = self.cli_executor.start_chat_session(self._chat_output_handler, agent=agent_name, cwd=self.project_path)
+            self._start_chat()
             time.sleep(2)  # MCP servers need time to load
-            p = self.cli_executor.chat_process
-            return success and p is not None and p.poll() is None
+            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
         
         success = await self.run_in_thread(start_new)
         
@@ -652,32 +656,13 @@ class KodaApp(App):
         status.set_status(t("switching_model", name=model_name))
         chat.add_log(t("switching_model", name=model_name))
         
-        self.cli_executor.stop_chat_session()
+        self.active_model = model_name
         
         import time
-        agent = self.agent_manager.active_agent
-        
         def start_new():
-            # Build command with model flag
-            cmd = self.cli_executor._build_cmd(["chat", "--model", model_name])
-            if agent:
-                cmd += ["--agent", agent]
-            
-            import subprocess
-            self.cli_executor.chat_process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE, text=True, bufsize=1,
-                cwd=self.project_path,
-                encoding='utf-8', errors='replace'
-            )
-            self.cli_executor.chat_output_callback = self._chat_output_handler
-            import threading
-            self.cli_executor.chat_reader_thread = threading.Thread(
-                target=self.cli_executor._read_chat_output, daemon=True
-            )
-            self.cli_executor.chat_reader_thread.start()
+            self._start_chat()
             time.sleep(1)
-            return self.cli_executor.chat_process.poll() is None
+            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
         
         success = await self.run_in_thread(start_new)
         
