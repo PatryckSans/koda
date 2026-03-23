@@ -317,7 +317,8 @@ class KodaApp(App):
         chat.add_log(t("auth_device_flow"))
 
         def output_handler(line: str):
-            self.call_from_thread(chat.add_message, line, "system")
+            if not CLIExecutor._is_spinner_line(line):
+                self.call_from_thread(chat.add_message, line, "system")
 
         def run_login():
             return self.cli_executor.login_interactive(
@@ -816,7 +817,8 @@ class KodaApp(App):
         chat.add_log(t("auth_device_flow"))
 
         def output_handler(line: str):
-            self.call_from_thread(chat.add_message, line, "system")
+            if not CLIExecutor._is_spinner_line(line):
+                self.call_from_thread(chat.add_message, line, "system")
 
         def run_login():
             return self.cli_executor.login_interactive(
