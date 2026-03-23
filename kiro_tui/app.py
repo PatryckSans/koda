@@ -394,6 +394,7 @@ class KodaApp(App):
             status.set_status(t("ready"))
             chat.add_log(t("chat_active"))
             self._poll_context()
+            self.cli_executor.refresh_tools()
         else:
             status.set_status(t("chat_failed"))
             chat.add_log(t("chat_failed_msg"))
@@ -439,7 +440,7 @@ class KodaApp(App):
             self.call_from_thread(self.query_one(StatusBar).set_context, pct)
         self.cli_executor.poll_context(on_context)
     
-    # Known built-in tools (kiro-cli 1.27+)
+    # Fallback tools if /tools hasn't been parsed yet
     BUILTIN_TOOLS = [
         "read", "write", "shell", "aws", "report",
         "code", "delegate", "glob", "grep", "introspect",
@@ -449,8 +450,9 @@ class KodaApp(App):
 
     def action_toggle_tools(self):
         """Show tools modal with toggles"""
-        trusted = getattr(self, '_trusted_tools', set(self.BUILTIN_TOOLS))
-        tools = [(name, name in trusted) for name in self.BUILTIN_TOOLS]
+        available = self.cli_executor.get_tools() or self.BUILTIN_TOOLS
+        trusted = getattr(self, '_trusted_tools', set())
+        tools = [(name, name in trusted) for name in available]
         self.push_screen(ToolsModal(tools), callback=self._on_tools_result)
 
     def action_save_chat(self):
@@ -513,7 +515,10 @@ class KodaApp(App):
         def do_restart():
             self._start_chat()
             time.sleep(2)
-            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
+            if self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None:
+                self.cli_executor.refresh_tools()
+                return True
+            return False
         success = await self.run_in_thread(do_restart)
         status.set_status(t("ready") if success else t("error"))
     

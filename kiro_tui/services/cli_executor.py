@@ -24,6 +24,8 @@ class CLIExecutor:
         self._pty_master = None
         self._last_sent = None  # for echo filtering
         self._context_callback = None
+        self._cached_tools = []  # tool names from /tools
+        self._collecting_tools = False
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
@@ -164,6 +166,7 @@ class CLIExecutor:
 
     # Prompt line pattern: "6% > ..." or "12% > ..."
     _PROMPT_RE = re.compile(r'^\d+%\s*>')
+    _TOOL_LINE_RE = re.compile(r'^-\s+(\w+)\s+')
 
     def _process_line(self, raw: str):
         """Process a single line of chat output."""
@@ -173,6 +176,7 @@ class CLIExecutor:
 
         # Filter prompt lines (e.g. "6% > ", "7% > Not sure where to start?")
         if self._PROMPT_RE.match(line):
+            self._collecting_tools = False
             # Extract context percentage for status bar
             m = re.match(r'(\d+)%', line)
             if m:
@@ -222,6 +226,19 @@ class CLIExecutor:
 
         # Noise filter
         if self._is_noise(line):
+            return
+
+        # /tools output: header starts collection, tool lines are cached
+        if line.startswith("Tool") and "Permission" in line:
+            self._collecting_tools = True
+            self._cached_tools = []
+            return
+        if line.startswith("Total") and self._collecting_tools:
+            self._collecting_tools = False
+            return
+        m_tool = self._TOOL_LINE_RE.match(line)
+        if m_tool and self._collecting_tools:
+            self._cached_tools.append(m_tool.group(1))
             return
 
         # Trust picker detection
@@ -501,6 +518,14 @@ class CLIExecutor:
             callback(pct)
         else:
             self._context_callback = callback
+
+    def refresh_tools(self):
+        """Send /tools to populate cached tool list."""
+        self.send_chat_message("/tools")
+
+    def get_tools(self) -> list:
+        """Return cached tool names."""
+        return list(self._cached_tools)
 
     # ── Prompts ─────────────────────────────────────────────────────
 
