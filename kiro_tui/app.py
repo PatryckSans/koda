@@ -566,7 +566,7 @@ class KodaApp(App):
 
     def on_trust_picker_trust_selected(self, event: TrustPicker.TrustSelected):
         """Handle trust scope selection - send arrow downs + Enter."""
-        # Navigate to selected option: N arrow-downs then Enter
+        self.cli_executor._awaiting_trust_options = False
         for _ in range(event.index):
             self.cli_executor.send_raw(b'\x1b[B')  # arrow down
         self.cli_executor.send_raw(b'\r')  # Enter

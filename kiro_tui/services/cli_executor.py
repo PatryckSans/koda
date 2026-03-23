@@ -34,6 +34,7 @@ class CLIExecutor:
         self._collecting_tools = False
         self._tools_ready_callback = None
         self._in_response = False
+        self._awaiting_trust_options = False
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
@@ -234,6 +235,7 @@ class CLIExecutor:
             # Trust picker ends the response flow (options follow via normal path)
             if "navigate" in line.lower() and "select" in line.lower():
                 self._in_response = False
+                self._awaiting_trust_options = True
                 if self.chat_output_callback:
                     self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
                 return
@@ -307,16 +309,13 @@ class CLIExecutor:
 
         # Trust picker detection
         if "navigate" in line.lower() and "select" in line.lower():
+            self._awaiting_trust_options = True
             if self.chat_output_callback:
                 self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
             return
 
-        # Trust option lines (> Full command → ...)
-        if line.startswith(">") and "→" in line:
-            if self.chat_output_callback:
-                self.chat_output_callback(f"__TRUST_OPTION__:{line}")
-            return
-        if "→" in line and any(kw in line for kw in ("command", "Tool", "paths", "directory")):
+        # Trust option lines — only when actively awaiting after picker
+        if self._awaiting_trust_options and "→" in line:
             if self.chat_output_callback:
                 self.chat_output_callback(f"__TRUST_OPTION__:{line}")
             return
