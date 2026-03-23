@@ -122,7 +122,7 @@ class ChatMessage(Static):
     }
     
     ChatMessage.user {
-        border-left: thick $accent;
+        border-left: thick $primary;
         padding: 0 1;
     }
     
