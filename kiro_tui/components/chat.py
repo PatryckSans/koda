@@ -151,8 +151,6 @@ class ChatMessage(Static):
     
     def __init__(self, content: str, role: str = "user"):
         if role == "assistant":
-            # Strip ### heading prefixes, convert **bold** to ANSI, render with from_ansi
-            content = re.sub(r'^(#{1,6})\s+', '', content, flags=re.MULTILINE)
             content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
             super().__init__(Text.from_ansi(content), markup=False)
         else:
@@ -161,7 +159,6 @@ class ChatMessage(Static):
 
     def update_content(self, content: str):
         """Update assistant message with new accumulated content."""
-        content = re.sub(r'^(#{1,6})\s+', '', content, flags=re.MULTILINE)
         content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
         self.update(Text.from_ansi(content))
 
