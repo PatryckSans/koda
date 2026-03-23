@@ -440,7 +440,12 @@ class KodaApp(App):
         self.cli_executor.poll_context(on_context)
     
     # Known built-in tools (kiro-cli 1.27+)
-    BUILTIN_TOOLS = ["read", "write", "shell", "aws", "report"]
+    BUILTIN_TOOLS = [
+        "read", "write", "shell", "aws", "report",
+        "code", "delegate", "glob", "grep", "introspect",
+        "knowledge", "session", "thinking", "todo",
+        "subagent", "web_fetch", "web_search",
+    ]
 
     def action_toggle_tools(self):
         """Show tools modal with toggles"""
