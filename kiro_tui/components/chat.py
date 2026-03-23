@@ -107,6 +107,9 @@ class TrustPicker(Container):
         self.post_message(self.TrustSelected(idx))
         for btn in self.query(Button):
             btn.disabled = True
+
+
+class ChatMessage(Static):
     """Single chat message"""
     
     DEFAULT_CSS = """
