@@ -220,6 +220,23 @@ class CLIExecutor:
 
         # If already in response, pass through with minimal filtering
         if self._in_response:
+            # Action prompt ends the response flow
+            if "Allow this action" in line or "[y/n" in line:
+                self._in_response = False
+                if self.chat_output_callback:
+                    self.chat_output_callback(display)
+                return
+            # Trust picker / trust options must be detected even mid-response
+            if "navigate" in line.lower() and "select" in line.lower():
+                self._in_response = False
+                if self.chat_output_callback:
+                    self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
+                return
+            if ("→" in line and any(kw in line for kw in ("command", "Tool", "paths", "directory"))) or \
+               (line.startswith(">") and "→" in line):
+                if self.chat_output_callback:
+                    self.chat_output_callback(f"__TRUST_OPTION__:{line}")
+                return
             # Only filter actual metadata lines (▸ Time: 3s)
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
