@@ -149,7 +149,7 @@ class ChatMessage(Static):
     """
     
     def __init__(self, content: str, role: str = "user"):
-        super().__init__(content, markup=False)
+        super().__init__(Text.from_ansi(content))
         self.add_class(role)
 
 

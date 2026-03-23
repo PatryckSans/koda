@@ -11,6 +11,12 @@ from typing import Dict, Any, Optional, Tuple, Callable, List
 IS_WINDOWS = sys.platform == "win32"
 
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\[[\d;]*m|\x1b\][^\x1b]*\x1b\\')
+# Control-only ANSI: cursor movement, erase, mode switches, OSC — NOT SGR (formatting)
+ANSI_CTRL_RE = re.compile(
+    r'\x1b\[\?[0-9]*[hl]'        # mode set/reset (?25h, ?2004l)
+    r'|\x1b\[\d*[ABCDEFGHJKST]'  # cursor movement, erase line/screen
+    r'|\x1b\][^\x1b]*\x1b\\'     # OSC sequences
+)
 
 
 class CLIExecutor:
@@ -47,6 +53,11 @@ class CLIExecutor:
     @staticmethod
     def _clean(text: str) -> str:
         return ANSI_RE.sub('', text).strip()
+
+    @staticmethod
+    def _clean_display(text: str) -> str:
+        """Strip control ANSI but keep SGR formatting (bold, color)."""
+        return ANSI_CTRL_RE.sub('', text).strip()
 
     @staticmethod
     def _is_noise(line: str) -> bool:
@@ -180,6 +191,7 @@ class CLIExecutor:
     def _process_line(self, raw: str):
         """Process a single line of chat output."""
         line = self._clean(raw)
+        display = self._clean_display(raw)
         if not line:
             return
 
@@ -280,9 +292,11 @@ class CLIExecutor:
         # Strip leading "> " from response first line
         if line.startswith("> "):
             line = line[2:]
+            # Also strip from display version (may have ANSI before "> ")
+            display = re.sub(r'^(?:\x1b\[\d*(?:;\d+)*m)*>\s', '', display)
 
         if self.chat_output_callback:
-            self.chat_output_callback(line)
+            self.chat_output_callback(display)
 
     def send_chat_message(self, message: str) -> bool:
         """Send message to chat session."""
