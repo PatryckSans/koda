@@ -15,12 +15,12 @@ class ActionPrompt(Container):
     ActionPrompt {
         width: 100%;
         height: auto;
-        background: $warning-darken-2;
+        background: $surface;
         padding: 1;
-        border: heavy $warning;
+        border: heavy $primary;
     }
     ActionPrompt .action-text {
-        color: $warning-lighten-3;
+        color: $text;
         text-style: bold;
         width: 100%;
         margin-bottom: 1;
@@ -142,11 +142,11 @@ class ChatMessage(Static):
     }
     
     ChatMessage.action {
-        background: $warning-darken-2;
-        color: $warning-lighten-3;
+        background: $surface;
+        color: $text;
         text-style: bold;
         padding: 1;
-        border: heavy $warning;
+        border: heavy $primary;
     }
     """
     
