@@ -24,8 +24,9 @@ class CLIExecutor:
         self._pty_master = None
         self._last_sent = None  # for echo filtering
         self._context_callback = None
-        self._cached_tools = []  # tool names from /tools
+        self._cached_tools = []  # (name, trusted) tuples from /tools
         self._collecting_tools = False
+        self._tools_ready_callback = None
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
@@ -235,10 +236,15 @@ class CLIExecutor:
             return
         if line.startswith("Total") and self._collecting_tools:
             self._collecting_tools = False
+            if self._tools_ready_callback:
+                self._tools_ready_callback()
+                self._tools_ready_callback = None
             return
         m_tool = self._TOOL_LINE_RE.match(line)
         if m_tool and self._collecting_tools:
-            self._cached_tools.append(m_tool.group(1))
+            name = m_tool.group(1)
+            trusted = "not trusted" not in line
+            self._cached_tools.append((name, trusted))
             return
 
         # Trust picker detection
@@ -519,12 +525,13 @@ class CLIExecutor:
         else:
             self._context_callback = callback
 
-    def refresh_tools(self):
-        """Send /tools to populate cached tool list."""
+    def refresh_tools(self, callback=None):
+        """Send /tools to populate cached tool list. Optional callback when done."""
+        self._tools_ready_callback = callback
         self.send_chat_message("/tools")
 
     def get_tools(self) -> list:
-        """Return cached tool names."""
+        """Return cached (name, trusted) tuples."""
         return list(self._cached_tools)
 
     # ── Prompts ─────────────────────────────────────────────────────

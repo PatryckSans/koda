@@ -394,7 +394,6 @@ class KodaApp(App):
             status.set_status(t("ready"))
             chat.add_log(t("chat_active"))
             self._poll_context()
-            self.cli_executor.refresh_tools()
         else:
             status.set_status(t("chat_failed"))
             chat.add_log(t("chat_failed_msg"))
@@ -449,11 +448,14 @@ class KodaApp(App):
     ]
 
     def action_toggle_tools(self):
-        """Show tools modal with toggles"""
-        available = self.cli_executor.get_tools() or self.BUILTIN_TOOLS
-        trusted = getattr(self, '_trusted_tools', set())
-        tools = [(name, name in trusted) for name in available]
-        self.push_screen(ToolsModal(tools), callback=self._on_tools_result)
+        """Show tools modal — fetches current tools from agent first"""
+        def on_tools_ready():
+            tools = self.cli_executor.get_tools()
+            if not tools:
+                tools = [(n, False) for n in self.BUILTIN_TOOLS]
+            self.call_from_thread(self.push_screen,
+                ToolsModal(tools), self._on_tools_result)
+        self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
         """Save current chat session"""
@@ -515,10 +517,7 @@ class KodaApp(App):
         def do_restart():
             self._start_chat()
             time.sleep(2)
-            if self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None:
-                self.cli_executor.refresh_tools()
-                return True
-            return False
+            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
         success = await self.run_in_thread(do_restart)
         status.set_status(t("ready") if success else t("error"))
     
