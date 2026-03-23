@@ -422,9 +422,11 @@ class KodaApp(App):
             else:
                 self._trust_options.append((opt, ""))
             # Show picker after collecting options (small delay via timer)
-            if hasattr(self, '_trust_timer'):
-                self._trust_timer.stop()
-            self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
+            def _schedule_picker():
+                if hasattr(self, '_trust_timer'):
+                    self._trust_timer.stop()
+                self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
+            self.call_from_thread(_schedule_picker)
             return
 
         # Action prompt — finalize current response first

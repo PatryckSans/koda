@@ -155,18 +155,23 @@ class CLIExecutor:
                     # Handle internal \r (prompt/spinner redraws)
                     if '\r' in line:
                         line = line.rsplit('\r', 1)[-1]
-                    self._process_line(line)
+                    try:
+                        self._process_line(line)
+                    except Exception:
+                        pass
                 # Handle \x1b[2K in remaining buffer (current incomplete line only)
                 if '\x1b[2K' in buf:
                     buf = buf.rsplit('\x1b[2K', 1)[-1]
                 # Check for trust picker prompt (no trailing \n)
                 clean = self._clean(buf)
                 if 'navigate' in clean.lower() and 'select' in clean.lower():
-                    self._process_line(buf)
+                    try:
+                        self._process_line(buf)
+                    except Exception:
+                        pass
                     buf = ""
-        except Exception as e:
-            if self.chat_output_callback:
-                self.chat_output_callback(f"Error: {e}")
+        except OSError:
+            pass
 
     def _read_chat_pipe(self):
         """Read from pipe stdout (Windows/WSL script)."""
