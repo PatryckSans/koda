@@ -33,6 +33,7 @@ class CLIExecutor:
         self._cached_tools = []  # (name, trusted) tuples from /tools
         self._collecting_tools = False
         self._tools_ready_callback = None
+        self._in_response = False
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
@@ -193,10 +194,15 @@ class CLIExecutor:
         line = self._clean(raw)
         display = self._clean_display(raw)
         if not line:
+            # Allow empty lines through during response (paragraph breaks)
+            if self._in_response:
+                if self.chat_output_callback:
+                    self.chat_output_callback("")
             return
 
         # Filter prompt lines (e.g. "6% > ", "7% > Not sure where to start?")
         if self._PROMPT_RE.match(line):
+            self._in_response = False
             if self._collecting_tools:
                 self._collecting_tools = False
                 if self._tools_ready_callback:
@@ -296,6 +302,7 @@ class CLIExecutor:
             display = re.sub(r'^(?:\x1b\[\d*(?:;\d+)*m)*>\s', '', display)
 
         if self.chat_output_callback:
+            self._in_response = True
             self.chat_output_callback(display)
 
     def send_chat_message(self, message: str) -> bool:
