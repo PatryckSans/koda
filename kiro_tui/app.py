@@ -400,6 +400,9 @@ class KodaApp(App):
     
     def _chat_output_handler(self, line: str):
         """Handle chat output: display message and reset status to ready."""
+        # Filter spinner/progress lines
+        if CLIExecutor._is_spinner_line(line):
+            return
         # Deduplicate consecutive identical messages
         if line == getattr(self, '_last_chat_line', None):
             return
@@ -486,7 +489,7 @@ class KodaApp(App):
         model = getattr(self, 'active_model', 'auto')
         
         def start_with_tools():
-            cmd = [self.cli_executor.cli_command, "chat"]
+            cmd = self.cli_executor._build_cmd(["chat"])
             if agent:
                 cmd += ["--agent", agent]
             if model != "auto":
@@ -498,7 +501,8 @@ class KodaApp(App):
             self.cli_executor.chat_process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE, text=True, bufsize=1,
-                cwd=self.project_path
+                cwd=self.project_path,
+                encoding='utf-8', errors='replace'
             )
             self.cli_executor.chat_output_callback = self._chat_output_handler
             self.cli_executor.chat_reader_thread = threading.Thread(
@@ -655,7 +659,7 @@ class KodaApp(App):
         
         def start_new():
             # Build command with model flag
-            cmd = [self.cli_executor.cli_command, "chat", "--model", model_name]
+            cmd = self.cli_executor._build_cmd(["chat", "--model", model_name])
             if agent:
                 cmd += ["--agent", agent]
             
@@ -663,7 +667,8 @@ class KodaApp(App):
             self.cli_executor.chat_process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE, text=True, bufsize=1,
-                cwd=self.project_path
+                cwd=self.project_path,
+                encoding='utf-8', errors='replace'
             )
             self.cli_executor.chat_output_callback = self._chat_output_handler
             import threading
