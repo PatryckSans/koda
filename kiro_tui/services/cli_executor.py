@@ -231,16 +231,11 @@ class CLIExecutor:
                 if self.chat_output_callback:
                     self.chat_output_callback(display)
                 return
-            # Trust picker / trust options must be detected even mid-response
+            # Trust picker ends the response flow (options follow via normal path)
             if "navigate" in line.lower() and "select" in line.lower():
                 self._in_response = False
                 if self.chat_output_callback:
                     self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
-                return
-            if ("→" in line and any(kw in line for kw in ("command", "Tool", "paths", "directory"))) or \
-               (line.startswith(">") and "→" in line):
-                if self.chat_output_callback:
-                    self.chat_output_callback(f"__TRUST_OPTION__:{line}")
                 return
             # Only filter actual metadata lines (▸ Time: 3s)
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
