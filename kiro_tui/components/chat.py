@@ -142,8 +142,8 @@ class ChatMessage(Static):
     }
     
     ChatMessage.action {
-        background: #b8860b;
-        color: #ffffff;
+        background: $warning-darken-2;
+        color: $warning-lighten-3;
         text-style: bold;
         padding: 1;
         border: heavy $warning;
