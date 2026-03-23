@@ -122,7 +122,8 @@ class ChatMessage(Static):
     }
     
     ChatMessage.user {
-        background: $primary-darken-2;
+        border-left: thick $accent;
+        padding: 0 1;
     }
     
     ChatMessage.assistant {
