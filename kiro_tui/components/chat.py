@@ -5,10 +5,7 @@ from textual.containers import Container, Vertical, Horizontal, VerticalScroll
 from textual.widgets import Static, Input, Button
 from textual.message import Message
 from ..i18n import t
-from rich.markdown import Markdown as RichMarkdown
-
-# Strip ALL ANSI sequences
-_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\][^\x1b]*\x1b\\')
+from rich.text import Text
 
 
 class ActionPrompt(Container):
@@ -154,16 +151,19 @@ class ChatMessage(Static):
     
     def __init__(self, content: str, role: str = "user"):
         if role == "assistant":
-            clean = _ANSI_RE.sub('', content)
-            super().__init__(RichMarkdown(clean))
+            # Strip ### heading prefixes, convert **bold** to ANSI, render with from_ansi
+            content = re.sub(r'^(#{1,6})\s+', '', content, flags=re.MULTILINE)
+            content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
+            super().__init__(Text.from_ansi(content), markup=False)
         else:
             super().__init__(content, markup=False)
         self.add_class(role)
 
-    def update_markdown(self, content: str):
+    def update_content(self, content: str):
         """Update assistant message with new accumulated content."""
-        clean = _ANSI_RE.sub('', content)
-        self.update(RichMarkdown(clean))
+        content = re.sub(r'^(#{1,6})\s+', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
+        self.update(Text.from_ansi(content))
 
 
 class ChatArea(Container):
@@ -225,7 +225,7 @@ class ChatArea(Container):
     def update_response(self, content: str):
         """Update the current assistant response widget."""
         if hasattr(self, '_current_response') and self._current_response:
-            self._current_response.update_markdown(content)
+            self._current_response.update_content(content)
             self.query_one("#messages", VerticalScroll).scroll_end(animate=False)
 
     def end_response(self):
