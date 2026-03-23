@@ -834,10 +834,36 @@ class KodaApp(App):
         if success:
             status.set_status(t("login_success"))
             self._update_auth_indicator(True)
+            self._ensure_experiments()
         else:
             status.set_status(t("login_failed"))
             self._update_auth_indicator(False)
-    
+
+    def _ensure_experiments(self):
+        """Enable required experimental features in cli.json."""
+        import json
+        cfg_path = os.path.expanduser("~/.kiro/settings/cli.json")
+        try:
+            data = {}
+            if os.path.exists(cfg_path):
+                with open(cfg_path) as f:
+                    data = json.load(f)
+            required = {
+                "chat.enableKnowledge": True,
+                "chat.enableThinking": True,
+                "chat.enableTangentMode": True,
+                "chat.enableTodoList": True,
+                "chat.enableDelegate": True,
+            }
+            if all(data.get(k) == v for k, v in required.items()):
+                return
+            data.update(required)
+            os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+            with open(cfg_path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+
     def _refresh_prompts(self):
         """Refresh prompts list in sidebar"""
         prompts = self.cli_executor.prompt_list(self.project_path)
