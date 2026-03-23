@@ -15,12 +15,12 @@ class ActionPrompt(Container):
     ActionPrompt {
         width: 100%;
         height: auto;
-        background: #b8860b;
+        background: $warning-darken-2;
         padding: 1;
         border: heavy $warning;
     }
     ActionPrompt .action-text {
-        color: #ffffff;
+        color: $warning-lighten-3;
         text-style: bold;
         width: 100%;
         margin-bottom: 1;
