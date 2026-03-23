@@ -152,10 +152,6 @@ class CLIExecutor:
                     if '\r' in line:
                         line = line.rsplit('\r', 1)[-1]
                     self._process_line(line)
-                # Handle \r in remaining buffer (prompt redraws without \n)
-                # Only discard if \r is NOT the last char (could be start of \r\n split across reads)
-                if '\r' in buf and '\n' not in buf and not buf.endswith('\r'):
-                    buf = buf.rsplit('\r', 1)[-1]
                 # Check for trust picker prompt (no trailing \n)
                 clean = self._clean(buf)
                 if 'navigate' in clean.lower() and 'select' in clean.lower():
@@ -298,8 +294,12 @@ class CLIExecutor:
         # Strip leading "> " from response first line
         if line.startswith("> "):
             line = line[2:]
-            # Also strip from display version (may have ANSI before "> ")
             display = re.sub(r'^(?:\x1b\[\d*(?:;\d+)*m)*>\s', '', display)
+
+        # Strip markdown heading prefixes (### etc.) — kiro-cli already applies bold ANSI
+        if re.match(r'^#{1,6}\s', line):
+            line = re.sub(r'^#{1,6}\s+', '', line)
+            display = re.sub(r'#{1,6}\s+', '', display, count=1)
 
         if self.chat_output_callback:
             self._in_response = True

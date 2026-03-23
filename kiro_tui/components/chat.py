@@ -149,6 +149,9 @@ class ChatMessage(Static):
     """
     
     def __init__(self, content: str, role: str = "user"):
+        import re
+        # Convert **bold** markdown to ANSI bold (kiro-cli sends it as literal text)
+        content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
         super().__init__(Text.from_ansi(content))
         self.add_class(role)
 
