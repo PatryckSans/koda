@@ -202,6 +202,13 @@ class CLIExecutor:
             return
         if any(kw in line for kw in ("% (estimated)", "Run /clear")):
             return
+        # Context bar (█ blocks) or /context output
+        if '█' in line or ('|' in line and '%' in line and '█' in raw):
+            m = re.search(r'([\d.]+)%', line)
+            if m and self._context_callback:
+                self._context_callback(float(m.group(1)))
+                self._context_callback = None
+            return
 
         # Response metadata
         if line.startswith("▸ "):
