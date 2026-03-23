@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, Tuple, Callable, List
 
 IS_WINDOWS = sys.platform == "win32"
 
-ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\[[\d;]*m')
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\[[\d;]*m|\x1b\][^\x1b]*\x1b\\')
 
 
 class CLIExecutor:
@@ -119,10 +119,21 @@ class CLIExecutor:
                 if not data:
                     break
                 buf += data
+                # Erase-line sequence means "discard current line" — reset buffer before it
+                if '\x1b[2K' in buf:
+                    buf = buf.rsplit('\x1b[2K', 1)[-1]
                 while '\n' in buf:
                     line, buf = buf.split('\n', 1)
+                    # Strip trailing \r from \r\n line endings first
+                    line = line.rstrip('\r')
+                    # Then handle internal \r (prompt/spinner redraws)
+                    if '\r' in line:
+                        line = line.rsplit('\r', 1)[-1]
                     self._process_line(line)
-                # Check for prompts that don't end with \n (trust picker)
+                # Handle \r in remaining buffer (prompt redraws without \n)
+                if '\r' in buf and '\n' not in buf:
+                    buf = buf.rsplit('\r', 1)[-1]
+                # Check for trust picker prompt (no trailing \n)
                 clean = self._clean(buf)
                 if 'navigate' in clean.lower() and 'select' in clean.lower():
                     self._process_line(buf)
@@ -151,16 +162,29 @@ class CLIExecutor:
             if self.chat_output_callback:
                 self.chat_output_callback(f"Error: {e}")
 
+    # Prompt line pattern: "6% > ..." or "12% > ..."
+    _PROMPT_RE = re.compile(r'^\d+%\s*>')
+
     def _process_line(self, raw: str):
         """Process a single line of chat output."""
         line = self._clean(raw)
         if not line:
             return
 
-        # Filter echo of sent messages
-        if self._last_sent and line.rstrip() == self._last_sent.rstrip():
-            self._last_sent = None
+        # Filter prompt lines (e.g. "6% > ", "7% > Not sure where to start?")
+        if self._PROMPT_RE.match(line):
+            # Extract context percentage for status bar
+            m = re.match(r'(\d+)%', line)
+            if m and self._context_callback:
+                self._context_callback(float(m.group(1)))
             return
+
+        # Filter echo of sent messages (exact match or fragment)
+        if self._last_sent:
+            sent = self._last_sent.rstrip()
+            if line.rstrip() == sent or (len(line) < len(sent) and line in sent):
+                self._last_sent = None
+                return
         # Filter lines that look like input echo (prompt prefix + our text)
         if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
             sent = self._last_sent.rstrip()
@@ -179,12 +203,12 @@ class CLIExecutor:
         if any(kw in line for kw in ("% (estimated)", "Run /clear")):
             return
 
+        # Response metadata
+        if line.startswith("▸ "):
+            return
+
         # Spinner/thinking
         if "Thinking" in line:
-            if "> " in line:
-                resp = line.split("> ", 1)[1].strip()
-                if resp and self.chat_output_callback:
-                    self.chat_output_callback(resp)
             return
 
         # Noise filter
@@ -207,6 +231,10 @@ class CLIExecutor:
                 self.chat_output_callback(f"__TRUST_OPTION__:{line}")
             return
 
+        # Strip leading "> " from response first line
+        if line.startswith("> "):
+            line = line[2:]
+
         if self.chat_output_callback:
             self.chat_output_callback(line)
 
@@ -215,7 +243,7 @@ class CLIExecutor:
         self._last_sent = message
         try:
             if self._pty_master is not None:
-                os.write(self._pty_master, (message + "\n").encode('utf-8'))
+                os.write(self._pty_master, (message + "\r").encode('utf-8'))
                 return True
             elif self.chat_process and self.chat_process.poll() is None:
                 self.chat_process.stdin.write(message + "\n")
