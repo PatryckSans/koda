@@ -203,7 +203,7 @@ class CLIExecutor:
                     self.chat_output_callback("")
             return
 
-        # Filter prompt lines (e.g. "6% > ", "7% > Not sure where to start?")
+        # Filter prompt lines — always check (ends response)
         if self._PROMPT_RE.match(line):
             self._in_response = False
             if self._collecting_tools:
@@ -211,7 +211,6 @@ class CLIExecutor:
                 if self._tools_ready_callback:
                     self._tools_ready_callback()
                     self._tools_ready_callback = None
-            # Extract context percentage for status bar
             m = re.match(r'(\d+)%', line)
             if m:
                 self._last_context_pct = float(m.group(1))
@@ -219,13 +218,23 @@ class CLIExecutor:
                     self._context_callback(self._last_context_pct)
             return
 
-        # Filter echo of sent messages (exact match or fragment)
+        # If already in response, pass through with minimal filtering
+        if self._in_response:
+            # Only filter actual metadata lines (▸ Time: 3s)
+            if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
+                return
+            if self.chat_output_callback:
+                self.chat_output_callback(display)
+            return
+
+        # === Below: filters only apply OUTSIDE response ===
+
+        # Filter echo of sent messages
         if self._last_sent:
             sent = self._last_sent.rstrip()
             if line.rstrip() == sent or (len(line) < len(sent) and line in sent):
                 self._last_sent = None
                 return
-        # Filter lines that look like input echo (prompt prefix + our text)
         if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
             sent = self._last_sent.rstrip()
             after = line.split(sent, 1)[-1].strip()
@@ -242,7 +251,6 @@ class CLIExecutor:
             return
         if any(kw in line for kw in ("% (estimated)", "Run /clear")):
             return
-        # Context bar (█ blocks) or /context output
         if '█' in line or ('|' in line and '%' in line and '█' in raw):
             m = re.search(r'([\d.]+)%', line)
             if m and self._context_callback:
@@ -262,14 +270,13 @@ class CLIExecutor:
         if self._is_noise(line):
             return
 
-        # /tools output: header starts collection, tool lines are cached
+        # /tools output
         if line.startswith("Tool") and "Permission" in line:
             self._collecting_tools = True
             self._cached_tools = []
             return
         if self._collecting_tools:
             if line.startswith("Total"):
-                # Schedule callback — more sections may follow, but prompt ends collection
                 self._tools_last_total_time = time.time()
                 return
             m_tool = self._TOOL_LINE_RE.match(line)
@@ -278,7 +285,6 @@ class CLIExecutor:
                 trusted = "not trusted" not in line
                 self._cached_tools.append((name, trusted))
                 return
-            # MCP section headers like "server-name (MCP)"
             if "(MCP)" in line:
                 return
 
