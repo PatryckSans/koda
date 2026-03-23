@@ -141,17 +141,21 @@ class CLIExecutor:
                 if not data:
                     break
                 buf += data
-                # Erase-line sequence means "discard current line" — reset buffer before it
-                if '\x1b[2K' in buf:
-                    buf = buf.rsplit('\x1b[2K', 1)[-1]
+                # First, extract all complete lines (before \n)
                 while '\n' in buf:
                     line, buf = buf.split('\n', 1)
                     # Strip trailing \r from \r\n line endings first
                     line = line.rstrip('\r')
-                    # Then handle internal \r (prompt/spinner redraws)
+                    # Handle \x1b[2K within this line (erase line = discard before it)
+                    if '\x1b[2K' in line:
+                        line = line.rsplit('\x1b[2K', 1)[-1]
+                    # Handle internal \r (prompt/spinner redraws)
                     if '\r' in line:
                         line = line.rsplit('\r', 1)[-1]
                     self._process_line(line)
+                # Handle \x1b[2K in remaining buffer (current incomplete line only)
+                if '\x1b[2K' in buf:
+                    buf = buf.rsplit('\x1b[2K', 1)[-1]
                 # Check for trust picker prompt (no trailing \n)
                 clean = self._clean(buf)
                 if 'navigate' in clean.lower() and 'select' in clean.lower():
