@@ -317,7 +317,9 @@ class KodaApp(App):
         chat.add_log(t("auth_device_flow"))
 
         def output_handler(line: str):
-            if not CLIExecutor._is_spinner_line(line):
+            # Whitelist: only show lines with useful login info
+            low = line.lower()
+            if any(kw in low for kw in ("http", "code", "browser", "success", "error", "fail", "logged", "token", "device", "authorize")):
                 self.call_from_thread(chat.add_message, line, "system")
 
         def run_login():
@@ -817,7 +819,8 @@ class KodaApp(App):
         chat.add_log(t("auth_device_flow"))
 
         def output_handler(line: str):
-            if not CLIExecutor._is_spinner_line(line):
+            low = line.lower()
+            if any(kw in low for kw in ("http", "code", "browser", "success", "error", "fail", "logged", "token", "device", "authorize")):
                 self.call_from_thread(chat.add_message, line, "system")
 
         def run_login():
