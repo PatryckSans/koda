@@ -143,9 +143,7 @@ echo [OK] Added to PATH
 :: Download icon
 echo Downloading icon...
 powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.png' -OutFile '%INSTALL_DIR%\koda-logo.png' -UseBasicParsing"
-
-:: Convert PNG to ICO for shortcut
-powershell -Command "Add-Type -AssemblyName System.Drawing; $img=[System.Drawing.Image]::FromFile('%INSTALL_DIR%\koda-logo.png'); $icon=[System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]$img).GetHicon()); $fs=[System.IO.File]::Create('%INSTALL_DIR%\koda.ico'); $icon.Save($fs); $fs.Close()" 2>nul
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.ico' -OutFile '%INSTALL_DIR%\koda.ico' -UseBasicParsing"
 echo [OK] Icon ready
 
 :: Desktop shortcut

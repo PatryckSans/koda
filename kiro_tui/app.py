@@ -310,6 +310,7 @@ class KodaApp(App):
         self.run_worker(self._do_login(result))
 
     async def _do_login(self, config: dict):
+        self.cli_executor.stop_chat_session()
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
         status.set_status(t("logging_in"))
@@ -808,6 +809,7 @@ class KodaApp(App):
         self.run_worker(self._do_sidebar_login(result))
 
     async def _do_sidebar_login(self, config: dict):
+        self.cli_executor.stop_chat_session()
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
         status.set_status(t("logging_in"))

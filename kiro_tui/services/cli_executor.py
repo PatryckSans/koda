@@ -24,6 +24,19 @@ class CLIExecutor:
         if IS_WINDOWS:
             return ["wsl", self.cli_command] + args
         return [self.cli_command] + args
+
+    @staticmethod
+    def _is_spinner_line(line: str) -> bool:
+        """Check if line is a spinner/progress/login noise line."""
+        if not line:
+            return True
+        # Braille spinner chars (U+2800-U+28FF)
+        if line[0] in "⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⢀⢁⣀⣁⣠⣡⣤⣥⣦⣧⣨⣩⣴⣵⣶⣷⣸⣹⣼⣽⣾⣿":
+            return True
+        for kw in ("Logging in", "Opening browser", "▰", "▱", "Logging out"):
+            if kw in line:
+                return True
+        return False
     
     def start_chat_session(self, output_callback: Callable[[str], None], agent: str = None, cwd: str = None) -> bool:
         """Start a persistent kiro-cli chat session"""
@@ -41,7 +54,9 @@ class CLIExecutor:
                 stdin=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                cwd=cwd
+                cwd=cwd,
+                encoding='utf-8',
+                errors='replace'
             )
             
             self.chat_output_callback = output_callback
@@ -162,7 +177,9 @@ class CLIExecutor:
                 self._build_cmd(args),
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                encoding='utf-8',
+                errors='replace'
             )
             
             output = result.stdout.strip()
@@ -195,7 +212,9 @@ class CLIExecutor:
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
                 text=True,
-                bufsize=0
+                bufsize=0,
+                encoding='utf-8',
+                errors='replace'
             )
             
             buffer = ""
@@ -208,7 +227,7 @@ class CLIExecutor:
                     continue
                 if char == '\n':
                     line = ansi_re.sub('', buffer).strip()
-                    if line and "Logging in" not in line and "Opening browser" not in line and "▰" not in line and "▱" not in line:
+                    if line and not self._is_spinner_line(line):
                         output_callback(line)
                     buffer = ""
                 else:
@@ -217,7 +236,7 @@ class CLIExecutor:
             # Flush remaining buffer
             if buffer:
                 line = ansi_re.sub('', buffer).strip()
-                if line and "Logging in" not in line and "Opening browser" not in line and "▰" not in line and "▱" not in line:
+                if line and not self._is_spinner_line(line):
                     output_callback(line)
             
             process.wait()
@@ -233,12 +252,13 @@ class CLIExecutor:
         
         try:
             if IS_WINDOWS:
-                # On Windows, use wsl which provides a TTY
+                # Use 'wsl -e bash -lic' to get a login shell with TTY-like behavior
                 result = subprocess.run(
-                    ["wsl", self.cli_command, "agent", "list"],
-                    capture_output=True, text=True, timeout=10
+                    ["wsl", "bash", "-lic", f"{self.cli_command} agent list"],
+                    capture_output=True, text=True, timeout=10,
+                    encoding='utf-8', errors='replace'
                 )
-                output = result.stdout
+                output = result.stdout + result.stderr
             else:
                 import pty, select
                 master, slave = pty.openpty()
@@ -294,7 +314,8 @@ class CLIExecutor:
         try:
             result = subprocess.run(
                 self._build_cmd(["chat", "--model", "___invalid___"]),
-                capture_output=True, text=True, timeout=10
+                capture_output=True, text=True, timeout=10,
+                encoding='utf-8', errors='replace'
             )
             output = result.stdout + result.stderr
             m = re.search(r'Available models: (.+)', output)
@@ -315,10 +336,11 @@ class CLIExecutor:
         try:
             if IS_WINDOWS:
                 result = subprocess.run(
-                    ["wsl", self.cli_command, "chat", "--list-sessions"],
-                    capture_output=True, text=True, timeout=15
+                    ["wsl", "bash", "-lic", f"{self.cli_command} chat --list-sessions"],
+                    capture_output=True, text=True, timeout=15,
+                    encoding='utf-8', errors='replace'
                 )
-                output = result.stdout
+                output = result.stdout + result.stderr
             else:
                 import pty, select
                 master, slave = pty.openpty()

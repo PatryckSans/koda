@@ -105,15 +105,8 @@ if ($userPath -notlike "*$INSTALL_DIR*") {
 $iconPng = "$INSTALL_DIR\koda-logo.png"
 $iconIco = "$INSTALL_DIR\koda.ico"
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.png" -OutFile $iconPng -UseBasicParsing
-try {
-    Add-Type -AssemblyName System.Drawing
-    $img = [System.Drawing.Image]::FromFile($iconPng)
-    $icon = [System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]$img).GetHicon())
-    $fs = [System.IO.File]::Create($iconIco)
-    $icon.Save($fs)
-    $fs.Close()
-    Write-Ok "Icon ready"
-} catch { Write-Warn "Could not convert icon" }
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.ico" -OutFile $iconIco -UseBasicParsing
+Write-Ok "Icon ready"
 
 # --- Desktop shortcut ---
 $desktop = [Environment]::GetFolderPath("Desktop")
