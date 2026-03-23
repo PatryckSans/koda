@@ -1,10 +1,14 @@
 """Chat component with message display and input"""
+import re
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, VerticalScroll
 from textual.widgets import Static, Input, Button
 from textual.message import Message
 from ..i18n import t
-from rich.text import Text
+from rich.markdown import Markdown as RichMarkdown
+
+# Strip ALL ANSI sequences
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9]*[hl]|\x1b\][^\x1b]*\x1b\\')
 
 
 class ActionPrompt(Container):
@@ -149,11 +153,17 @@ class ChatMessage(Static):
     """
     
     def __init__(self, content: str, role: str = "user"):
-        import re
-        # Convert **bold** markdown to ANSI bold (kiro-cli sends it as literal text)
-        content = re.sub(r'\*\*(.+?)\*\*', lambda m: f'\x1b[1m{m.group(1)}\x1b[22m', content)
-        super().__init__(Text.from_ansi(content))
+        if role == "assistant":
+            clean = _ANSI_RE.sub('', content)
+            super().__init__(RichMarkdown(clean))
+        else:
+            super().__init__(content, markup=False)
         self.add_class(role)
+
+    def update_markdown(self, content: str):
+        """Update assistant message with new accumulated content."""
+        clean = _ANSI_RE.sub('', content)
+        self.update(RichMarkdown(clean))
 
 
 class ChatArea(Container):
@@ -204,9 +214,23 @@ class ChatArea(Container):
         messages = self.query_one("#messages", VerticalScroll)
         if role == "action":
             messages.mount(ActionPrompt(content))
+        elif role == "assistant":
+            widget = ChatMessage(content, role)
+            self._current_response = widget
+            messages.mount(widget)
         else:
             messages.mount(ChatMessage(content, role))
         messages.scroll_end(animate=False)
+
+    def update_response(self, content: str):
+        """Update the current assistant response widget."""
+        if hasattr(self, '_current_response') and self._current_response:
+            self._current_response.update_markdown(content)
+            self.query_one("#messages", VerticalScroll).scroll_end(animate=False)
+
+    def end_response(self):
+        """Finalize current response."""
+        self._current_response = None
     
     def add_log(self, content: str):
         """Add a log message"""

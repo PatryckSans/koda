@@ -399,8 +399,8 @@ class KodaApp(App):
             chat.add_log(t("chat_failed_msg"))
     
     def _chat_output_handler(self, line: str):
-        """Handle chat output: display message and reset status to ready."""
-        # Deduplicate consecutive identical messages
+        """Handle chat output: accumulate response into single Markdown widget."""
+        # Deduplicate consecutive identical lines
         if line == getattr(self, '_last_chat_line', None):
             return
         self._last_chat_line = line
@@ -427,11 +427,34 @@ class KodaApp(App):
             self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
             return
 
-        role = "assistant"
+        # Action prompt — finalize current response first
         if "Allow this action" in line or "[y/n" in line:
-            role = "action"
-        self.call_from_thread(chat.add_message, line, role)
+            self._end_response()
+            self.call_from_thread(chat.add_message, line, "action")
+            self.call_from_thread(status.set_status, t("ready"))
+            return
+
+        # Accumulate response lines into single widget
+        if not hasattr(self, '_response_lines'):
+            self._response_lines = []
+
+        self._response_lines.append(line)
+        full = '\n'.join(self._response_lines)
+
+        if len(self._response_lines) == 1:
+            self.call_from_thread(chat.add_message, full, "assistant")
+        else:
+            self.call_from_thread(chat.update_response, full)
         self.call_from_thread(status.set_status, t("ready"))
+
+    def _end_response(self):
+        """Finalize current response accumulation."""
+        self._response_lines = []
+        self._last_chat_line = None
+        try:
+            self.call_from_thread(self.query_one(ChatArea).end_response)
+        except Exception:
+            pass
 
     def _poll_context(self):
         """Silently poll /context to update status bar percentage."""
@@ -549,6 +572,7 @@ class KodaApp(App):
 
     def on_chat_area_message_submitted(self, event: ChatArea.MessageSubmitted):
         """Handle chat message submission"""
+        self._end_response()  # Finalize previous response
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
         
