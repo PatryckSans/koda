@@ -141,7 +141,8 @@ class CLIExecutor:
                         line = line.rsplit('\r', 1)[-1]
                     self._process_line(line)
                 # Handle \r in remaining buffer (prompt redraws without \n)
-                if '\r' in buf and '\n' not in buf:
+                # Only discard if \r is NOT the last char (could be start of \r\n split across reads)
+                if '\r' in buf and '\n' not in buf and not buf.endswith('\r'):
                     buf = buf.rsplit('\r', 1)[-1]
                 # Check for trust picker prompt (no trailing \n)
                 clean = self._clean(buf)

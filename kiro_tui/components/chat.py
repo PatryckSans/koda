@@ -149,7 +149,8 @@ class ChatMessage(Static):
     """
     
     def __init__(self, content: str, role: str = "user"):
-        super().__init__(content)
+        # Escape Rich markup so [text] isn't interpreted as tags
+        super().__init__(content.replace("[", "\\["))
         self.add_class(role)
 
 
