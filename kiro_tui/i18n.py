@@ -86,6 +86,7 @@ STRINGS = {
     "action_yes": {"en": "Yes", "pt": "Sim", "es": "Si"},
     "action_no": {"en": "No", "pt": "Nao", "es": "No"},
     "action_trust": {"en": "Trust", "pt": "Confiar", "es": "Confiar"},
+    "loading_project": {"en": "Loading project: {name}...", "pt": "Carregando projeto: {name}...", "es": "Cargando proyecto: {name}..."},
     "trust_scope_title": {"en": "Select trust scope:", "pt": "Selecionar escopo de confianca:", "es": "Seleccionar alcance de confianza:"},
     "trust_specific_paths": {"en": "Specific paths", "pt": "Caminhos especificos", "es": "Rutas especificas"},
     "trust_complete_dir": {"en": "Complete directory", "pt": "Diretorio completo", "es": "Directorio completo"},

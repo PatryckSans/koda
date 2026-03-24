@@ -355,6 +355,7 @@ class KodaApp(App):
             return
         
         self.project_path = path
+        self.notify(t("loading_project", name=os.path.basename(path)), timeout=5)
         
         # Update auth indicator
         self._update_auth_indicator(self.is_authenticated)
