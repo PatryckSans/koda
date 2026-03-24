@@ -67,7 +67,7 @@ STRINGS = {
     "error": {"en": "Error", "pt": "Erro", "es": "Error"},
     "or_overwrite": {"en": "Or overwrite existing:", "pt": "Ou sobrescrever existente:", "es": "O sobrescribir existente:"},
     "tools_title": {"en": "Tools", "pt": "Ferramentas", "es": "Herramientas"},
-    "trust_selected": {"en": "Trust Selected", "pt": "Confiar Selecionados", "es": "Confiar Seleccionados"},
+    "done": {"en": "Done", "pt": "Concluído", "es": "Listo"},
 
     # Welcome / Project
     "welcome": {"en": "Welcome to KODA", "pt": "Bem-vindo ao KODA", "es": "Bienvenido a KODA"},

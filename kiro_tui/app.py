@@ -103,7 +103,7 @@ class ToolsModal(ModalScreen):
             with Horizontal(id="btns"):
                 yield Button("Trust All", variant="warning", id="trust-all")
                 yield Button("Reset", id="reset")
-                yield Button(t("cancel"), id="close")
+                yield Button(t("done"), id="close")
 
     def on_checkbox_changed(self, event):
         name = event.checkbox.id[2:]  # strip "t-"
