@@ -169,6 +169,13 @@ class CLIExecutor:
                     except Exception:
                         pass
                     buf = ""
+                # Check for prompt in buffer (no trailing \n) to capture context %
+                elif self._PROMPT_RE.match(clean):
+                    try:
+                        self._process_line(buf)
+                    except Exception:
+                        pass
+                    buf = ""
         except OSError:
             pass
 
