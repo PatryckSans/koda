@@ -356,52 +356,50 @@ class KodaApp(App):
         
         self.project_path = path
         self.notify(t("loading_project", name=os.path.basename(path)), timeout=5)
-        self.set_timer(0.1, lambda: self._init_project(path))
+        self.run_worker(lambda: self._init_project(path), thread=True)
 
     def _init_project(self, path: str):
-        """Initialize project after notification renders."""
+        """Initialize project in background thread."""
+        import time
         
         # Update auth indicator
-        self._update_auth_indicator(self.is_authenticated)
+        self.call_from_thread(self._update_auth_indicator, self.is_authenticated)
         
         # Load agents
         agents = self.agent_manager.list_agents()
         agents_section = self.query_one(AgentsSection)
-        agents_section.update_agents(agents)
+        self.call_from_thread(agents_section.update_agents, agents)
         
         # Set active agent in status bar
         status = self.query_one(StatusBar)
         if self.agent_manager.active_agent:
-            status.set_agent(self.agent_manager.active_agent)
+            self.call_from_thread(status.set_agent, self.agent_manager.active_agent)
         
         # Load models
         self.active_model = "auto"
         success, models = self.cli_executor.model_list()
         if success:
-            self.query_one(ModelsSection).update_models(models, self.active_model)
-            status.set_model(self.active_model)
-        
-        # Start chat session in selected project directory
-        chat = self.query_one(ChatArea)
+            self.call_from_thread(self.query_one(ModelsSection).update_models, models, self.active_model)
+            self.call_from_thread(status.set_model, self.active_model)
         
         # Load prompts
-        self._refresh_prompts()
+        self.call_from_thread(self._refresh_prompts)
         
-        status.set_status(f"Project: {os.path.basename(path)}")
-        chat.add_log(t("project_label", path=path))
-        chat.add_log(t("starting_chat"))
+        chat = self.query_one(ChatArea)
+        self.call_from_thread(status.set_status, f"Project: {os.path.basename(path)}")
+        self.call_from_thread(chat.add_log, t("project_label", path=path))
+        self.call_from_thread(chat.add_log, t("starting_chat"))
         
-        import time
         success = self._start_chat()
         time.sleep(1)
         
         if success and self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None:
-            status.set_status(t("ready"))
-            chat.add_log(t("chat_active"))
+            self.call_from_thread(status.set_status, t("ready"))
+            self.call_from_thread(chat.add_log, t("chat_active"))
             self._poll_context()
         else:
-            status.set_status(t("chat_failed"))
-            chat.add_log(t("chat_failed_msg"))
+            self.call_from_thread(status.set_status, t("chat_failed"))
+            self.call_from_thread(chat.add_log, t("chat_failed_msg"))
     
     def _chat_output_handler(self, line: str):
         """Handle chat output: accumulate response into single Markdown widget."""
