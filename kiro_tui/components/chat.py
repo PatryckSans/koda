@@ -173,6 +173,48 @@ class ChatMessage(Static):
         self.update(Text.from_ansi(content))
 
 
+class GhostMascot(Static):
+    """Animated ghost mascot next to chat input."""
+
+    IDLE = "༼ つ ◕_◕ ༽つ"
+    FRAMES = [
+        "༼ つ ◕_◕ ༽つ",
+        "༼ つ ◕_· ༽つ",
+        "༼ つ ·_◕ ༽つ",
+        "༼ つ ·_· ༽つ",
+    ]
+
+    DEFAULT_CSS = """
+    GhostMascot {
+        width: auto;
+        height: 1;
+        content-align: right middle;
+        padding: 0 1;
+    }
+    """
+
+    _timer = None
+    _frame = 0
+
+    def on_mount(self):
+        self.update(self.IDLE)
+
+    def start(self):
+        if not self._timer:
+            self._frame = 0
+            self._timer = self.set_interval(0.3, self._animate)
+
+    def stop(self):
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
+        self.update(self.IDLE)
+
+    def _animate(self):
+        self._frame = (self._frame + 1) % len(self.FRAMES)
+        self.update(self.FRAMES[self._frame])
+
+
 class ChatArea(Container):
     """Chat area with messages and input"""
     
@@ -190,10 +232,11 @@ class ChatArea(Container):
     #input-container {
         height: auto;
         padding: 1;
+        layout: horizontal;
     }
     
     #chat-input {
-        width: 100%;
+        width: 1fr;
     }
     """
     
@@ -208,12 +251,15 @@ class ChatArea(Container):
             yield ChatMessage(t("welcome"), "system")
         with Vertical(id="input-container"):
             yield Input(placeholder=t("type_message"), id="chat-input")
+            yield GhostMascot(id="ghost")
     
     def on_input_submitted(self, event: Input.Submitted):
         """Handle input submission"""
         if event.value.strip():
             self.add_message(event.value, "user")
             self.post_message(self.MessageSubmitted(event.value))
+            event.input.value = ""
+            self.query_one("#ghost", GhostMascot).start()
             event.input.value = ""
     
     def add_message(self, content: str, role: str = "user"):
@@ -238,6 +284,10 @@ class ChatArea(Container):
     def end_response(self):
         """Finalize current response."""
         self._current_response = None
+        try:
+            self.query_one("#ghost", GhostMascot).stop()
+        except Exception:
+            pass
     
     def add_log(self, content: str):
         """Add a log message"""
