@@ -209,10 +209,10 @@ class CLIExecutor:
         display = self._clean_display(raw)
         # DEBUG
         import time
-        with open(__import__("os").path.expanduser("~/koda_debug.log"), "a", encoding="utf-8") as f:
-            f.write(f"{time.time():.3f} _process_line in_resp={self._in_response} line={line[:100]!r}\n")
+        _dl = __import__("os").path.expanduser("~/koda_debug.log")
+        with open(_dl, "a", encoding="utf-8") as f:
+            f.write(f"{time.time():.3f} PROC in_resp={self._in_response} line={line[:120]!r}\n")
         if not line:
-            # Allow empty lines through during response (paragraph breaks)
             if self._in_response:
                 if self.chat_output_callback:
                     self.chat_output_callback("")
@@ -221,6 +221,8 @@ class CLIExecutor:
         # Filter prompt lines — always check (ends response)
         if self._PROMPT_RE.match(line):
             self._in_response = False
+            with open(_dl, "a", encoding="utf-8") as f:
+                f.write(f"  -> PROMPT detected\n")
             if self._collecting_tools:
                 self._collecting_tools = False
                 if self._tools_ready_callback:
@@ -238,30 +240,29 @@ class CLIExecutor:
 
         # If already in response, pass through with minimal filtering
         if self._in_response:
-            # Action prompt ends the response flow
             if "Allow this action" in line or "[y/n" in line:
                 self._in_response = False
                 if self.chat_output_callback:
                     self.chat_output_callback(display)
                 return
-            # Trust picker ends the response flow (options follow via normal path)
             if "navigate" in line.lower() and "select" in line.lower():
                 self._in_response = False
                 self._awaiting_trust_options = True
                 if self.chat_output_callback:
                     self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
                 return
-            # /tools output header — switch to tools collection mode
             if line.startswith("Tool") and "Permission" in line:
                 self._in_response = False
                 self._collecting_tools = True
                 self._cached_tools = []
                 return
-            # Only filter actual metadata lines (▸ Time: 3s)
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
+                with open(_dl, "a", encoding="utf-8") as f:
+                    f.write(f"  -> FILTERED metadata\n")
                 return
-            # Spinner/thinking inside response
             if "Thinking" in line:
+                with open(_dl, "a", encoding="utf-8") as f:
+                    f.write(f"  -> FILTERED thinking\n")
                 return
             if self.chat_output_callback:
                 self.chat_output_callback(display)
@@ -273,12 +274,16 @@ class CLIExecutor:
         if self._last_sent:
             sent = self._last_sent.rstrip()
             if line.rstrip() == sent or (len(line) < len(sent) and line in sent):
+                with open(_dl, "a", encoding="utf-8") as f:
+                    f.write(f"  -> FILTERED echo\n")
                 self._last_sent = None
                 return
         if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
             sent = self._last_sent.rstrip()
             after = line.split(sent, 1)[-1].strip()
             if not after:
+                with open(_dl, "a", encoding="utf-8") as f:
+                    f.write(f"  -> FILTERED echo2\n")
                 self._last_sent = None
                 return
 
@@ -304,10 +309,14 @@ class CLIExecutor:
 
         # Spinner/thinking
         if "Thinking" in line:
+            with open(_dl, "a", encoding="utf-8") as f:
+                f.write(f"  -> FILTERED thinking (outside)\n")
             return
 
         # Noise filter
         if self._is_noise(line):
+            with open(_dl, "a", encoding="utf-8") as f:
+                f.write(f"  -> FILTERED noise\n")
             return
 
         # /tools output
