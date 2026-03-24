@@ -233,7 +233,7 @@ class ChatArea(Container):
     #input-container {
         height: auto;
         padding: 1;
-        align-horizontal: center;
+        layout: horizontal;
     }
     
     #chat-input {
