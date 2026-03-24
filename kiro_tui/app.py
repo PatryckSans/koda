@@ -437,6 +437,7 @@ class KodaApp(App):
             pct = float(line.split(":", 1)[1])
             self.call_from_thread(status.set_context, pct)
             self.call_from_thread(status.set_status, t("ready"))
+            self.call_from_thread(chat.stop_ghost)
             return
 
         # Trust picker detection
@@ -476,7 +477,6 @@ class KodaApp(App):
 
         if len(self._response_lines) == 1:
             self.call_from_thread(chat.add_message, full, "assistant")
-            self.call_from_thread(chat.stop_ghost)
         else:
             self.call_from_thread(chat.update_response, full)
         self.call_from_thread(status.set_status, t("ready"))
@@ -487,6 +487,7 @@ class KodaApp(App):
         self._last_chat_line = None
         try:
             chat = self.query_one(ChatArea)
+            chat.stop_ghost()
             try:
                 self.call_from_thread(chat.end_response)
             except RuntimeError:
