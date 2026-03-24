@@ -302,6 +302,12 @@ class ChatArea(Container):
             self.query_one("#ghost", GhostMascot).start()
         except Exception:
             pass
+
+    def stop_ghost(self):
+        try:
+            self.query_one("#ghost", GhostMascot).stop()
+        except Exception:
+            pass
     
     def add_log(self, content: str):
         """Add a log message"""

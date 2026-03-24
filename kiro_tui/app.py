@@ -414,9 +414,6 @@ class KodaApp(App):
         # Context percentage update
         if line.startswith("__CONTEXT__:"):
             pct = float(line.split(":", 1)[1])
-            self._response_lines = []
-            self._last_chat_line = None
-            self.call_from_thread(chat.end_response)
             self.call_from_thread(status.set_context, pct)
             self.call_from_thread(status.set_status, t("ready"))
             return
@@ -458,6 +455,7 @@ class KodaApp(App):
 
         if len(self._response_lines) == 1:
             self.call_from_thread(chat.add_message, full, "assistant")
+            self.call_from_thread(chat.stop_ghost)
         else:
             self.call_from_thread(chat.update_response, full)
         self.call_from_thread(status.set_status, t("ready"))
