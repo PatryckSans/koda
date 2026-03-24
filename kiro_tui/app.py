@@ -669,28 +669,17 @@ class KodaApp(App):
         self._end_response()
         self.agent_manager.active_agent = agent_name
         
-        import time
-        def start_new():
-            self._start_chat()
-            time.sleep(2)  # MCP servers need time to load
-            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
+        # Switch agent within existing session to preserve context
+        self.cli_executor.send_chat_message(f"/agent {agent_name}")
         
-        success = await self.run_in_thread(start_new)
+        status.set_agent(agent_name)
+        status.set_status(t("ready"))
+        chat.add_log(t("now_chatting", name=agent_name))
+        self.notify(t("now_chatting", name=agent_name), severity="information")
         
-        if success:
-            self.agent_manager.active_agent = agent_name
-            status.set_agent(agent_name)
-            status.set_status(t("ready"))
-            chat.add_log(t("now_chatting", name=agent_name))
-            self.notify(t("now_chatting", name=agent_name), severity="information")
-            
-            # Refresh agent list
-            agents = self.agent_manager.list_agents()
-            self.query_one(AgentsSection).update_agents(agents)
-        else:
-            status.set_status(t("error"))
-            chat.add_log(t("switch_failed"))
-            self.notify(t("switch_failed"), severity="error")
+        # Refresh agent list
+        agents = self.agent_manager.list_agents()
+        self.query_one(AgentsSection).update_agents(agents)
     
     async def handle_model_selection(self, label_text: str):
         """Handle model selection - restart chat with new model"""
@@ -704,28 +693,13 @@ class KodaApp(App):
         self._end_response()
         self.active_model = model_name
         
-        import time
-        def start_new():
-            self._start_chat()
-            time.sleep(1)
-            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
+        # Switch model within existing session to preserve context
+        self.cli_executor.send_chat_message(f"/model {model_name}")
         
-        success = await self.run_in_thread(start_new)
-        
-        if success:
-            self.active_model = model_name
-            status.set_model(model_name)
-            status.set_status(t("ready"))
-            chat.add_log(t("now_model", name=model_name))
-            self.notify(t("now_model", name=model_name), severity="information")
-            
-            # Refresh model list
-            _, models = self.cli_executor.model_list()
-            if models:
-                self.query_one(ModelsSection).update_models(models, model_name)
-        else:
-            status.set_status(t("error"))
-            chat.add_log(t("switch_model_failed"))
+        status.set_model(model_name)
+        status.set_status(t("ready"))
+        chat.add_log(t("now_model", name=model_name))
+        self.notify(t("now_model", name=model_name), severity="information")
     
     async def handle_chat_action(self, label_text: str):
         """Handle chat action from sidebar"""
