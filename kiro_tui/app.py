@@ -475,7 +475,6 @@ class KodaApp(App):
         full = '\n'.join(self._response_lines)
 
         if len(self._response_lines) == 1:
-            self._awaiting_response = False
             self.call_from_thread(chat.add_message, full, "assistant")
             self.call_from_thread(chat.stop_ghost)
         else:
@@ -486,7 +485,6 @@ class KodaApp(App):
         """Finalize current response accumulation."""
         self._response_lines = []
         self._last_chat_line = None
-        self._awaiting_response = False
         try:
             chat = self.query_one(ChatArea)
             try:
@@ -512,7 +510,12 @@ class KodaApp(App):
 
     def _is_processing(self) -> bool:
         """Check if kiro is currently processing."""
-        return getattr(self, '_awaiting_response', False)
+        try:
+            from kiro_tui.components.chat import GhostMascot
+            ghost = self.query_one("#ghost", GhostMascot)
+            return ghost._animating
+        except Exception:
+            return False
 
     def action_handle_escape(self):
         if self._is_processing():
@@ -647,7 +650,6 @@ class KodaApp(App):
         success = self.cli_executor.send_chat_message(event.text)
         
         if success:
-            self._awaiting_response = True
             status.set_status(t("thinking"))
             chat.start_ghost()
             # Poll context after a delay to let response complete
