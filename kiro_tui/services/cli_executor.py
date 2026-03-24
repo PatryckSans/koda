@@ -689,14 +689,21 @@ class CLIExecutor:
             return True
         return False
 
+    @staticmethod
+    def _read_file(path):
+        try:
+            return open(path, encoding="utf-8").read()
+        except UnicodeDecodeError:
+            return open(path, encoding="latin-1").read()
+
     def prompt_read(self, name, project_path=None):
         if project_path:
             local = os.path.join(project_path, ".kiro", "prompts", f"{name}.md")
             if os.path.exists(local):
-                return open(local, encoding="utf-8").read(), False
+                return self._read_file(local), False
         g = os.path.join(os.path.expanduser("~/.kiro/prompts"), f"{name}.md")
         if os.path.exists(g):
-            return open(g, encoding="utf-8").read(), True
+            return self._read_file(g), True
         return "", False
 
     # ── Auth ────────────────────────────────────────────────────────
