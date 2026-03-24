@@ -509,13 +509,14 @@ class KodaApp(App):
     ]
 
     def _is_processing(self) -> bool:
-        """Check if kiro is currently processing."""
+        """Check if kiro is currently processing (thinking or streaming)."""
         try:
             from kiro_tui.components.chat import GhostMascot
-            ghost = self.query_one("#ghost", GhostMascot)
-            return ghost._animating
+            if self.query_one("#ghost", GhostMascot)._animating:
+                return True
         except Exception:
-            return False
+            pass
+        return bool(getattr(self, '_response_lines', None))
 
     def action_handle_escape(self):
         if self._is_processing():
