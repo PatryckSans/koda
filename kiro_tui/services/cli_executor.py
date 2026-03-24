@@ -237,6 +237,12 @@ class CLIExecutor:
                 if self.chat_output_callback:
                     self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
                 return
+            # /tools output header — switch to tools collection mode
+            if line.startswith("Tool") and "Permission" in line:
+                self._in_response = False
+                self._collecting_tools = True
+                self._cached_tools = []
+                return
             # Only filter actual metadata lines (▸ Time: 3s)
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
