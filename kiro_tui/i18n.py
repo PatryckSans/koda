@@ -86,6 +86,10 @@ STRINGS = {
     "action_yes": {"en": "Yes", "pt": "Sim", "es": "Si"},
     "action_no": {"en": "No", "pt": "Nao", "es": "No"},
     "action_trust": {"en": "Trust", "pt": "Confiar", "es": "Confiar"},
+    "trust_scope_title": {"en": "Select trust scope:", "pt": "Selecionar escopo de confianca:", "es": "Seleccionar alcance de confianza:"},
+    "trust_specific_paths": {"en": "Specific paths", "pt": "Caminhos especificos", "es": "Rutas especificas"},
+    "trust_complete_dir": {"en": "Complete directory", "pt": "Diretorio completo", "es": "Directorio completo"},
+    "trust_entire_tool": {"en": "Entire Tool", "pt": "Ferramenta inteira", "es": "Herramienta completa"},
 
     # Prompts
     "prompts": {"en": "Prompts", "pt": "Prompts", "es": "Prompts"},

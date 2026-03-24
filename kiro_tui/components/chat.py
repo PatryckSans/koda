@@ -97,10 +97,18 @@ class TrustPicker(Container):
         super().__init__()
         self.options = options  # list of (label, detail) tuples
 
+    _LABEL_MAP = {
+        "Specific paths": "trust_specific_paths",
+        "Complete directory": "trust_complete_dir",
+        "Entire Tool": "trust_entire_tool",
+    }
+
     def compose(self) -> ComposeResult:
-        yield Static("Select trust scope:", classes="picker-title")
+        yield Static(t("trust_scope_title"), classes="picker-title")
         for i, (label, detail) in enumerate(self.options):
-            text = f"{label} -> {detail}" if detail else label
+            key = self._LABEL_MAP.get(label.strip())
+            display = t(key) if key else label
+            text = f"{display} -> {detail}" if detail else display
             yield Button(text, variant="warning", id=f"trust-{i}")
 
     def on_button_pressed(self, event: Button.Pressed):
