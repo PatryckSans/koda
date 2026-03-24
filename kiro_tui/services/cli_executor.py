@@ -364,14 +364,14 @@ class CLIExecutor:
             m_tool = self._TOOL_LINE_RE.match(line)
             if m_tool:
                 name = m_tool.group(1)
-                # Parse permission: "trusted", "allowed", or "ask"
+                # Parse permission: check negatives first ("not trusted" contains "trusted")
                 ll = line.lower()
-                if "trusted" in ll:
-                    perm = "trusted"
+                if "not trusted" in ll or "per-request" in ll or "ask" in ll:
+                    perm = "ask"
                 elif "allowed" in ll:
                     perm = "allowed"
                 else:
-                    perm = "ask"
+                    perm = "trusted"
                 self._cached_tools.append((name, perm, self._tools_current_server))
                 return
             if "(MCP)" in line:
