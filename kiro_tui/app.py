@@ -606,6 +606,12 @@ class KodaApp(App):
         def on_confirm(confirmed: bool):
             if confirmed:
                 self.cli_executor.send_chat_message("/clear")
+                # Auto-confirm kiro-cli's built-in [y/n] prompt
+                import threading
+                def auto_confirm():
+                    import time; time.sleep(1)
+                    self.cli_executor.send_chat_message("y")
+                threading.Thread(target=auto_confirm, daemon=True).start()
                 chat = self.query_one(ChatArea)
                 chat.query_one("#messages").remove_children()
                 chat.add_log(t("chat_cleared"))
