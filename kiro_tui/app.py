@@ -582,8 +582,12 @@ class KodaApp(App):
             tools = self.cli_executor.get_tools()
             if not tools:
                 tools = [(n, False) for n in self.BUILTIN_TOOLS]
+            # Capture baseline so diff is computed against what modal showed
+            original = {n: t for n, t in tools}
+            def on_result(result):
+                self._on_tools_result(result, original)
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools), self._on_tools_result)
+                ToolsModal(tools), on_result)
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
@@ -629,14 +633,11 @@ class KodaApp(App):
         prompts = self.cli_executor.prompt_list(self.project_path)
         self.push_screen(PromptsManagerModal(prompts), callback=self._on_manager_result)
     
-    def _on_tools_result(self, result: dict):
+    def _on_tools_result(self, result: dict, original: dict):
         if not result:
             return
-        new_trusted = {name for name, on in result.items() if on}
-        new_untrusted = {name for name, on in result.items() if not on}
-        old_trusted = {n for n, t in self.cli_executor.get_tools() if t}
-        to_trust = new_trusted - old_trusted
-        to_untrust = new_untrusted & old_trusted
+        to_trust = [n for n, on in result.items() if on and not original.get(n, False)]
+        to_untrust = [n for n, on in result.items() if not on and original.get(n, False)]
         if not to_trust and not to_untrust:
             return
         if to_trust:
