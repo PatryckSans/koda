@@ -380,7 +380,18 @@ class CLIExecutor:
         return False
 
     def send_interrupt(self):
-        """Send Ctrl+C (SIGINT) to interrupt current processing."""
+        """Send SIGINT to interrupt current processing."""
+        import signal
+        try:
+            if self.chat_process and self.chat_process.poll() is None:
+                if IS_WINDOWS:
+                    self.chat_process.send_signal(signal.CTRL_C_EVENT)
+                else:
+                    os.kill(self.chat_process.pid, signal.SIGINT)
+                return True
+        except Exception:
+            pass
+        # Fallback: send \x03 through PTY/pipe
         try:
             if self._pty_master is not None:
                 os.write(self._pty_master, b'\x03')
