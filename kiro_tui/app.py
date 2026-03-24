@@ -639,17 +639,10 @@ class KodaApp(App):
         to_untrust = new_untrusted & old_trusted
         if not to_trust and not to_untrust:
             return
-        # Send commands with delay between them
-        import threading
-        def send_tool_cmds():
-            import time
-            if to_trust:
-                self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
-                time.sleep(1.5)
-            if to_untrust:
-                self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
-        threading.Thread(target=send_tool_cmds, daemon=True).start()
-        # Update cache locally so next modal open shows correct state
+        if to_trust:
+            self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
+        if to_untrust:
+            self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
         self.cli_executor.update_tools_cache(result)
         self.query_one(ChatArea).add_log(t("tools_updated"))
 
