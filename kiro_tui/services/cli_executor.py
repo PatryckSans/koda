@@ -30,12 +30,11 @@ class CLIExecutor:
         self._pty_master = None
         self._last_sent = None  # for echo filtering
         self._context_callback = None
-        self._cached_tools = []  # (name, permission, server) tuples from /tools
-        self._collecting_tools = False
-        self._tools_ready_callback = None
-        self._tools_current_server = None
         self._in_response = False
-        self._awaiting_trust_options = False
+        self._tools_collecting = False
+        self._tools_callback = None
+        self._tools_data = []
+        self._tools_server = None
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
@@ -139,13 +138,6 @@ class CLIExecutor:
                 if not r:
                     if self.chat_process and self.chat_process.poll() is not None:
                         break
-                    # Check if tools collection timed out (1s after last Total)
-                    if self._collecting_tools and hasattr(self, '_tools_last_total_time'):
-                        if time.time() - self._tools_last_total_time > 1.0:
-                            self._collecting_tools = False
-                            if self._tools_ready_callback:
-                                self._tools_ready_callback()
-                                self._tools_ready_callback = None
                     # Flush buffer if it contains a prompt line (no trailing \n)
                     if buf:
                         clean = self._clean(buf)
@@ -221,7 +213,6 @@ class CLIExecutor:
 
     # Prompt line pattern: "6% > ..." or "agent-name 12% > ..."
     _PROMPT_RE = re.compile(r'\d+%\s*>')
-    _TOOL_LINE_RE = re.compile(r'^-\s+(\w+)\s+')
 
     def _process_line(self, raw: str):
         """Process a single line of chat output."""
@@ -236,11 +227,12 @@ class CLIExecutor:
         # Filter prompt lines — always check (ends response)
         if self._PROMPT_RE.search(line) and len(line) < 60:
             self._in_response = False
-            if self._collecting_tools:
-                self._collecting_tools = False
-                if self._tools_ready_callback:
-                    self._tools_ready_callback()
-                    self._tools_ready_callback = None
+            if self._tools_collecting:
+                self._tools_collecting = False
+                if self._tools_callback:
+                    cb = self._tools_callback
+                    self._tools_callback = None
+                    cb(self._tools_data)
             m = re.search(r'(\d+)%', line)
             if m:
                 self._last_context_pct = float(m.group(1))
@@ -260,15 +252,11 @@ class CLIExecutor:
                 return
             if "navigate" in line.lower() and "select" in line.lower():
                 self._in_response = False
-                self._awaiting_trust_options = True
                 if self.chat_output_callback:
-                    self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
+                    self.chat_output_callback(display)
                 return
             if line.startswith("Tool") and "Permission" in line:
                 self._in_response = False
-                self._collecting_tools = True
-                self._cached_tools = []
-                self._tools_current_server = None
                 return
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
@@ -345,54 +333,27 @@ class CLIExecutor:
         if self._is_noise(line):
             return
 
-        # /tools trust/untrust confirmation and echo
-        if "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line or "are set to per-request" in line:
+        # /tools output — parse or suppress
+        if line.startswith("/tools") or "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line or "are set to per-request" in line:
             return
-        if line.startswith("/tools"):
-            return
-
-        # /tools output
         if line.startswith("Tool") and "Permission" in line:
-            self._collecting_tools = True
-            self._cached_tools = []
-            self._tools_current_server = None
+            self._tools_collecting = True
+            self._tools_data = []
+            self._tools_server = None
             return
-        if self._collecting_tools:
-            if line.startswith("Total"):
-                self._tools_last_total_time = time.time()
-                return
-            m_tool = self._TOOL_LINE_RE.match(line)
-            if m_tool:
-                name = m_tool.group(1)
-                # Real values: "trusted", "trusted (prerelease)", "trust read-only operations",
-                #              "trust working directory", "trust read-only commands", "not trusted"
-                ll = line.lower()
-                if "not trusted" in ll:
-                    perm = "ask"
-                elif re.search(r'\btrusted\b', ll):
-                    perm = "trusted"
-                else:
-                    perm = "allowed"  # "trust ..." = default floor, can't go lower
-                self._cached_tools.append((name, perm, self._tools_current_server))
-                return
-            if "(MCP)" in line:
-                self._tools_current_server = "@" + line.split("(MCP)")[0].strip()
-                return
-            if line in ("Built-in", "Native"):
-                self._tools_current_server = None
-                return
-
-        # Trust picker detection
-        if "navigate" in line.lower() and "select" in line.lower():
-            self._awaiting_trust_options = True
-            if self.chat_output_callback:
-                self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
-            return
-
-        # Trust option lines — only when actively awaiting after picker
-        if self._awaiting_trust_options and "→" in line:
-            if self.chat_output_callback:
-                self.chat_output_callback(f"__TRUST_OPTION__:{line}")
+        if self._tools_collecting:
+            if line.startswith("- "):
+                m = re.match(r'^-\s+(\w+)\s+', line)
+                if m:
+                    name = m.group(1)
+                    ll = line.lower()
+                    checked = "not trusted" not in ll
+                    self._tools_data.append((name, checked, self._tools_server))
+            elif "(MCP)" in line:
+                self._tools_server = line.split("(MCP)")[0].strip()
+            elif line in ("Built-in", "Native"):
+                self._tools_server = None
+            # Don't leak /tools output to chat
             return
 
         # Strip leading "> " from response first line
@@ -680,15 +641,14 @@ class CLIExecutor:
         else:
             self._context_callback = callback
 
-    def refresh_tools(self, callback=None):
-        """Send /tools to populate cached tool list. Optional callback when done."""
-        self._collecting_tools = False
-        self._tools_ready_callback = callback
-        self.send_chat_message("/tools")
+    # ── Tools ────────────────────────────────────────────────────────
 
-    def get_tools(self) -> list:
-        """Return cached (name, permission, server) tuples."""
-        return list(self._cached_tools)
+    def fetch_tools(self, callback):
+        """Send /tools and call callback(tools_list) when parsed.
+        tools_list: [(name, checked, server)] where server is None for built-in."""
+        self._tools_callback = callback
+        self._tools_collecting = False
+        self.send_chat_message("/tools")
 
     # ── Prompts ─────────────────────────────────────────────────────
 

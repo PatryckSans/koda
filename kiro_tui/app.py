@@ -61,66 +61,62 @@ class InputModal(ModalScreen[str]):
         self.dismiss(event.value)
 
 
+
+
 class ToolsModal(ModalScreen):
-    """Modal to view and toggle tools — sends trust/untrust immediately"""
-    
+    """Tools permission modal — each toggle sends trust/untrust immediately"""
+
     DEFAULT_CSS = """
     ToolsModal { align: center middle; }
     ToolsModal > Vertical {
         width: 90%; height: 80%; border: thick $primary;
         background: $surface; padding: 1 2;
     }
-    ToolsModal #tools-title { height: auto; margin-bottom: 1; }
     ToolsModal #tools-scroll { height: 1fr; border: solid $primary-darken-2; }
     ToolsModal #tools-scroll Checkbox { margin: 0; padding: 0 1; }
-    ToolsModal .tools-section { height: auto; margin: 0 0 0 1; color: $text-muted; }
-    ToolsModal #tools-buttons { height: auto; margin-top: 1; dock: bottom; }
+    ToolsModal .section { height: auto; margin: 0 0 0 1; color: $text-muted; }
+    ToolsModal #btns { height: auto; margin-top: 1; dock: bottom; }
     """
-    
-    def __init__(self, tools: list, send_fn, log_fn):
-        """tools: (name, perm, server) tuples. send_fn: sends command. log_fn: logs message."""
+
+    def __init__(self, tools, send, log):
         super().__init__()
-        self.tools = tools
-        self.send = send_fn
-        self.log = log_fn
-    
-    def compose(self) -> ComposeResult:
+        self.tools = tools  # [(name, checked, server)]
+        self.send = send
+        self.log = log
+
+    def compose(self):
         with Vertical():
-            yield Label(t("tools_title"), id="tools-title")
+            yield Label(t("tools_title"), id="title")
             with VerticalScroll(id="tools-scroll"):
-                current_section = "__none__"
-                for name, perm, server in self.tools:
-                    section = server or "Built-in"
-                    if section != current_section:
-                        current_section = section
-                        yield Label(section, classes="tools-section")
-                    yield Checkbox(name, value=perm != "ask", id=f"tool-{name}")
-            with Horizontal(id="tools-buttons"):
+                section = None
+                for name, checked, server in self.tools:
+                    s = server or "Built-in"
+                    if s != section:
+                        section = s
+                        yield Label(s, classes="section")
+                    yield Checkbox(name, value=checked, id=f"t-{name}")
+            with Horizontal(id="btns"):
                 yield Button("Trust All", variant="warning", id="trust-all")
                 yield Button("Reset", id="reset")
                 yield Button(t("cancel"), id="close")
-    
-    def on_checkbox_changed(self, event: Checkbox.Changed):
-        name = event.checkbox.id.removeprefix("tool-")
+
+    def on_checkbox_changed(self, event):
+        name = event.checkbox.id[2:]  # strip "t-"
         if event.value:
             self.send(f"/tools trust {name}")
             self.log(f"✅ trusted: {name}")
         else:
             self.send(f"/tools untrust {name}")
             self.log(f"⬜ untrusted: {name}")
-    
-    def on_button_pressed(self, event: Button.Pressed):
-        bid = event.button.id
-        if bid == "trust-all":
+
+    def on_button_pressed(self, event):
+        if event.button.id == "trust-all":
             self.send("/tools trust-all")
             self.log("✅ trusted all tools")
-            self.dismiss()
-        elif bid == "reset":
+        elif event.button.id == "reset":
             self.send("/tools reset")
             self.log("🔄 tools reset")
-            self.dismiss()
-        else:
-            self.dismiss()
+        self.dismiss()
 
 
 class SaveModal(ModalScreen[str]):
@@ -491,27 +487,6 @@ class KodaApp(App):
                 self.call_from_thread(status.set_status, t("ready"))
             return
 
-        # Trust picker detection
-        if line.startswith("__TRUST_PICKER__:"):
-            self._trust_options = []
-            return
-        if line.startswith("__TRUST_OPTION__:"):
-            opt = line[len("__TRUST_OPTION__:"):]
-            # Parse "  Full command → git pull --rebase" or "> Full command → ..."
-            opt = opt.lstrip("> ").strip()
-            if "→" in opt:
-                label, detail = opt.split("→", 1)
-                self._trust_options.append((label.strip(), detail.strip()))
-            else:
-                self._trust_options.append((opt, ""))
-            # Show picker after collecting options (small delay via timer)
-            def _schedule_picker():
-                if hasattr(self, '_trust_timer'):
-                    self._trust_timer.stop()
-                self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
-            self.call_from_thread(_schedule_picker)
-            return
-
         # Action prompt — finalize current response first
         if "Allow this action" in line or "[y/n" in line:
             self._end_response()
@@ -552,13 +527,6 @@ class KodaApp(App):
         self.cli_executor.poll_context(on_context)
     
     # Fallback tools if /tools hasn't been parsed yet
-    BUILTIN_TOOLS = [
-        "read", "write", "shell", "aws", "report",
-        "code", "delegate", "glob", "grep", "introspect",
-        "knowledge", "session", "thinking", "todo",
-        "subagent", "web_fetch", "web_search",
-    ]
-
     def _is_processing(self) -> bool:
         """Check if kiro is currently processing (thinking or streaming)."""
         try:
@@ -599,17 +567,15 @@ class KodaApp(App):
             self.push_screen(ConfirmQuitModal(), on_quit)
 
     def action_toggle_tools(self):
-        """Show tools modal — fetches current tools from kiro-cli"""
         chat = self.query_one(ChatArea)
         send = self.cli_executor.send_chat_message
-        def on_tools_ready():
-            tools = self.cli_executor.get_tools()
-            if not tools:
+        def on_tools(tools):
+            if tools:
+                self.call_from_thread(self.push_screen,
+                    ToolsModal(tools, send, chat.add_log))
+            else:
                 self.call_from_thread(chat.add_log, "⚠ /tools returned empty")
-                return
-            self.call_from_thread(self.push_screen,
-                ToolsModal(tools, send, chat.add_log))
-        self.cli_executor.refresh_tools(callback=on_tools_ready)
+        self.cli_executor.fetch_tools(on_tools)
 
     def action_save_chat(self):
         """Save current chat session"""
@@ -691,7 +657,6 @@ class KodaApp(App):
 
     def on_trust_picker_trust_selected(self, event: TrustPicker.TrustSelected):
         """Handle trust scope selection - send arrow downs + Enter."""
-        self.cli_executor._awaiting_trust_options = False
         for _ in range(event.index):
             self.cli_executor.send_raw(b'\x1b[B')  # arrow down
         self.cli_executor.send_raw(b'\r')  # Enter

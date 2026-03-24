@@ -66,8 +66,7 @@ STRINGS = {
     "logout_failed": {"en": "Logout failed", "pt": "Falha no logout", "es": "Error al cerrar sesion"},
     "error": {"en": "Error", "pt": "Erro", "es": "Error"},
     "or_overwrite": {"en": "Or overwrite existing:", "pt": "Ou sobrescrever existente:", "es": "O sobrescribir existente:"},
-    "tools_title": {"en": "Available Tools (toggle to trust/untrust):", "pt": "Ferramentas (alternar confianca):", "es": "Herramientas (alternar confianza):"},
-    "tools_updated": {"en": "Tool permissions updated", "pt": "Permissões de ferramentas atualizadas", "es": "Permisos de herramientas actualizados"},
+    "tools_title": {"en": "Tools", "pt": "Ferramentas", "es": "Herramientas"},
     "trust_selected": {"en": "Trust Selected", "pt": "Confiar Selecionados", "es": "Confiar Seleccionados"},
 
     # Welcome / Project
