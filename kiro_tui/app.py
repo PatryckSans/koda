@@ -414,7 +414,9 @@ class KodaApp(App):
         # Context percentage update
         if line.startswith("__CONTEXT__:"):
             pct = float(line.split(":", 1)[1])
-            self._end_response()
+            self._response_lines = []
+            self._last_chat_line = None
+            self.call_from_thread(chat.end_response)
             self.call_from_thread(status.set_context, pct)
             self.call_from_thread(status.set_status, t("ready"))
             return
@@ -589,8 +591,10 @@ class KodaApp(App):
 
     def on_chat_area_message_submitted(self, event: ChatArea.MessageSubmitted):
         """Handle chat message submission"""
-        self._end_response()  # Finalize previous response
         chat = self.query_one(ChatArea)
+        chat.end_response()  # Finalize previous response (direct call, main thread)
+        self._response_lines = []
+        self._last_chat_line = None
         status = self.query_one(StatusBar)
         
         # Check if chat session is active
