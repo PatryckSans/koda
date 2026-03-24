@@ -186,11 +186,10 @@ class GhostMascot(Static):
 
     DEFAULT_CSS = """
     GhostMascot {
-        width: auto;
+        width: 20;
         height: 3;
         content-align: center middle;
         border: round $primary;
-        padding: 0 1;
     }
     """
 
@@ -206,17 +205,19 @@ class GhostMascot(Static):
         if self._timer:
             self._timer.stop()
         self._frame = 0
-        self._timer = self.set_interval(0.3, self._animate)
+        self._timer = self.set_interval(0.1, self._animate)
 
     def stop(self):
         if self._timer:
             self._timer.stop()
             self._timer = None
         self.update(self.IDLE)
+        self.refresh()
 
     def _animate(self):
         self._frame = (self._frame + 1) % len(self.FRAMES)
         self.update(self.FRAMES[self._frame])
+        self.refresh()
 
 
 class ChatArea(Container):
