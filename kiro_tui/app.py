@@ -93,12 +93,7 @@ class ToolsModal(ModalScreen):
                     if section != current_section:
                         current_section = section
                         yield Label(section, classes="tools-section")
-                    locked = perm == "allowed"
-                    label = f"{name} 🔒" if locked else name
-                    cb = Checkbox(label, value=perm in ("trusted", "allowed"), id=f"tool-{name}")
-                    if locked:
-                        cb.disabled = True
-                    yield cb
+                    yield Checkbox(name, value=perm != "ask", id=f"tool-{name}")
             with Horizontal(id="tools-buttons"):
                 yield Button("Trust All", variant="warning", id="trust-all")
                 yield Button("Reset", id="reset")
