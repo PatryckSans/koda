@@ -403,15 +403,8 @@ class KodaApp(App):
     
     def _chat_output_handler(self, line: str):
         """Handle chat output: accumulate response into single Markdown widget."""
-        # DEBUG
-        import time
-        _dl = __import__("os").path.expanduser("~/koda_debug.log")
-        with open(_dl, "a", encoding="utf-8") as f:
-            f.write(f"{time.time():.3f} HANDLER line={line[:120]!r} resp_lines={len(getattr(self,'_response_lines',[]))}\n")
         # Deduplicate consecutive identical lines
         if line == getattr(self, '_last_chat_line', None):
-            with open(_dl, "a", encoding="utf-8") as f:
-                f.write(f"  -> DEDUP skipped\n")
             return
         self._last_chat_line = line
 

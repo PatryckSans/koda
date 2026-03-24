@@ -207,11 +207,6 @@ class CLIExecutor:
         """Process a single line of chat output."""
         line = self._clean(raw)
         display = self._clean_display(raw)
-        # DEBUG
-        import time
-        _dl = __import__("os").path.expanduser("~/koda_debug.log")
-        with open(_dl, "a", encoding="utf-8") as f:
-            f.write(f"{time.time():.3f} PROC in_resp={self._in_response} line={line[:120]!r}\n")
         if not line:
             if self._in_response:
                 if self.chat_output_callback:
@@ -221,8 +216,6 @@ class CLIExecutor:
         # Filter prompt lines — always check (ends response)
         if self._PROMPT_RE.match(line):
             self._in_response = False
-            with open(_dl, "a", encoding="utf-8") as f:
-                f.write(f"  -> PROMPT detected\n")
             if self._collecting_tools:
                 self._collecting_tools = False
                 if self._tools_ready_callback:
@@ -257,8 +250,6 @@ class CLIExecutor:
                 self._cached_tools = []
                 return
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
-                with open(_dl, "a", encoding="utf-8") as f:
-                    f.write(f"  -> FILTERED metadata\n")
                 return
             if "Thinking" in line:
                 # Windows: response may be concatenated after spinner
@@ -271,11 +262,7 @@ class CLIExecutor:
                         display = after
                         if self.chat_output_callback:
                             self.chat_output_callback(display)
-                        with open(_dl, "a", encoding="utf-8") as f:
-                            f.write(f"  -> EXTRACTED from thinking: {after[:80]!r}\n")
                         return
-                with open(_dl, "a", encoding="utf-8") as f:
-                    f.write(f"  -> FILTERED thinking\n")
                 return
             if self.chat_output_callback:
                 self.chat_output_callback(display)
@@ -287,16 +274,12 @@ class CLIExecutor:
         if self._last_sent:
             sent = self._last_sent.rstrip()
             if line.rstrip() == sent or (len(line) < len(sent) and line in sent):
-                with open(_dl, "a", encoding="utf-8") as f:
-                    f.write(f"  -> FILTERED echo\n")
                 self._last_sent = None
                 return
         if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
             sent = self._last_sent.rstrip()
             after = line.split(sent, 1)[-1].strip()
             if not after:
-                with open(_dl, "a", encoding="utf-8") as f:
-                    f.write(f"  -> FILTERED echo2\n")
                 self._last_sent = None
                 return
 
@@ -331,22 +314,14 @@ class CLIExecutor:
                         after = after[2:]
                     line = after
                     display = after
-                    with open(_dl, "a", encoding="utf-8") as f:
-                        f.write(f"  -> EXTRACTED from thinking (outside): {after[:80]!r}\n")
                     # Fall through to process as response
                 else:
-                    with open(_dl, "a", encoding="utf-8") as f:
-                        f.write(f"  -> FILTERED thinking (outside)\n")
                     return
             else:
-                with open(_dl, "a", encoding="utf-8") as f:
-                    f.write(f"  -> FILTERED thinking (outside)\n")
                 return
 
         # Noise filter
         if self._is_noise(line):
-            with open(_dl, "a", encoding="utf-8") as f:
-                f.write(f"  -> FILTERED noise\n")
             return
 
         # /tools output
