@@ -77,11 +77,12 @@ class ToolsModal(ModalScreen):
     ToolsModal #tools-buttons { height: auto; margin-top: 1; dock: bottom; }
     """
     
-    def __init__(self, tools: list, send_fn):
-        """tools: (name, perm, server) tuples. send_fn: sends command to kiro-cli."""
+    def __init__(self, tools: list, send_fn, log_fn):
+        """tools: (name, perm, server) tuples. send_fn: sends command. log_fn: logs message."""
         super().__init__()
         self.tools = tools
         self.send = send_fn
+        self.log = log_fn
     
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -103,16 +104,20 @@ class ToolsModal(ModalScreen):
         name = event.checkbox.id.removeprefix("tool-")
         if event.value:
             self.send(f"/tools trust {name}")
+            self.log(f"✅ trusted: {name}")
         else:
             self.send(f"/tools untrust {name}")
+            self.log(f"⬜ untrusted: {name}")
     
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
         if bid == "trust-all":
             self.send("/tools trust-all")
+            self.log("✅ trusted all tools")
             self.dismiss()
         elif bid == "reset":
             self.send("/tools reset")
+            self.log("🔄 tools reset")
             self.dismiss()
         else:
             self.dismiss()
@@ -602,7 +607,8 @@ class KodaApp(App):
                     self.query_one(ChatArea).add_log, "⚠ /tools returned empty")
                 return
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools, self.cli_executor.send_chat_message))
+                ToolsModal(tools, self.cli_executor.send_chat_message,
+                           self.query_one(ChatArea).add_log))
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
