@@ -81,6 +81,8 @@ class ToolsModal(ModalScreen):
     ToolsModal #tools-scroll Checkbox { margin: 0; padding: 0 1; }
     ToolsModal .section { height: auto; margin: 0 0 0 1; color: $text-muted; }
     ToolsModal #btns { height: auto; margin-top: 1; dock: bottom; }
+    ToolsModal #spacer { width: 1fr; }
+    ToolsModal #close { background: green; }
     """
 
     def __init__(self, tools, send, log_fn):
@@ -103,7 +105,9 @@ class ToolsModal(ModalScreen):
             with Horizontal(id="btns"):
                 yield Button("Trust All", variant="warning", id="trust-all")
                 yield Button("Reset", id="reset")
-                yield Button(t("done"), id="close")
+                from textual.widgets import Static
+                yield Static("", id="spacer")
+                yield Button(t("done"), variant="success", id="close")
 
     def on_checkbox_changed(self, event):
         name = event.checkbox.id[2:]  # strip "t-"
