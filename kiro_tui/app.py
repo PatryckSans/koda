@@ -861,10 +861,7 @@ class KodaApp(App):
             self.run_worker(self._list_sessions())
         
         elif t("clear") in label_text:
-            self.cli_executor.send_chat_message("/clear")
-            messages = chat.query_one("#messages")
-            messages.remove_children()
-            chat.add_log(t("chat_cleared"))
+            self.action_clear_chat()
         
         elif t("compact") in label_text:
             self.cli_executor.send_chat_message("/compact")
