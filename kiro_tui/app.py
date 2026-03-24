@@ -630,7 +630,12 @@ class KodaApp(App):
     def on_action_prompt_action_response(self, event: ActionPrompt.ActionResponse):
         """Handle y/n/t button click on action prompts"""
         self.cli_executor.send_chat_message(event.response)
-        self.query_one(StatusBar).set_status(t("thinking") if event.response != "n" else t("ready"))
+        chat = self.query_one(ChatArea)
+        if event.response != "n":
+            self.query_one(StatusBar).set_status(t("thinking"))
+            chat.start_ghost()
+        else:
+            self.query_one(StatusBar).set_status(t("ready"))
 
     def _show_trust_picker(self):
         """Show trust picker options as buttons in chat."""
@@ -648,6 +653,7 @@ class KodaApp(App):
             self.cli_executor.send_raw(b'\x1b[B')  # arrow down
         self.cli_executor.send_raw(b'\r')  # Enter
         self.query_one(StatusBar).set_status(t("thinking"))
+        self.query_one(ChatArea).start_ghost()
 
     def on_chat_area_message_submitted(self, event: ChatArea.MessageSubmitted):
         """Handle chat message submission"""
