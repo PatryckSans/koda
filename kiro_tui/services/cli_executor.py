@@ -209,7 +209,7 @@ class CLIExecutor:
         display = self._clean_display(raw)
         # DEBUG
         import time
-        with open(__import__("os").path.expanduser("~/koda_debug.log"), "a") as f:
+        with open(__import__("os").path.expanduser("~/koda_debug.log"), "a", encoding="utf-8") as f:
             f.write(f"{time.time():.3f} _process_line in_resp={self._in_response} line={line[:100]!r}\n")
         if not line:
             # Allow empty lines through during response (paragraph breaks)
