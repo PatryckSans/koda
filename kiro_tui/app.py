@@ -600,15 +600,15 @@ class KodaApp(App):
 
     def action_toggle_tools(self):
         """Show tools modal — fetches current tools from kiro-cli"""
+        chat = self.query_one(ChatArea)
+        send = self.cli_executor.send_chat_message
         def on_tools_ready():
             tools = self.cli_executor.get_tools()
             if not tools:
-                self.call_from_thread(
-                    self.query_one(ChatArea).add_log, "⚠ /tools returned empty")
+                self.call_from_thread(chat.add_log, "⚠ /tools returned empty")
                 return
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools, self.cli_executor.send_chat_message,
-                           self.query_one(ChatArea).add_log))
+                ToolsModal(tools, send, chat.add_log))
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):

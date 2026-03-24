@@ -348,7 +348,7 @@ class CLIExecutor:
         # /tools trust/untrust confirmation and echo
         if "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line or "are set to per-request" in line:
             return
-        if line.startswith("/tools") or (self._last_sent and self._last_sent.startswith("/tools") and all(w.replace("@","").replace("/","").replace("-","").replace("_","").isalnum() for w in line.split())):
+        if line.startswith("/tools"):
             return
 
         # /tools output
