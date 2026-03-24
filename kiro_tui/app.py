@@ -666,6 +666,7 @@ class KodaApp(App):
         status.set_status(t("switching_agent", name=agent_name))
         chat.add_log(t("switching_agent", name=agent_name))
         
+        self._end_response()
         self.agent_manager.active_agent = agent_name
         
         import time
@@ -700,6 +701,7 @@ class KodaApp(App):
         status.set_status(t("switching_model", name=model_name))
         chat.add_log(t("switching_model", name=model_name))
         
+        self._end_response()
         self.active_model = model_name
         
         import time
@@ -911,6 +913,7 @@ class KodaApp(App):
             self.push_screen(PromptsManagerModal(prompts), callback=self._on_manager_result)
         else:
             # Direct send
+            self._end_response()
             name = label_text.split("] ", 1)[-1].strip()
             self.cli_executor.send_chat_message(f"/prompts get {name}")
             self.query_one(ChatArea).add_log(t("prompt_sent", name=name))
