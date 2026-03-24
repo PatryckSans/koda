@@ -106,7 +106,7 @@ class TrustPicker(Container):
     def compose(self) -> ComposeResult:
         yield Static(t("trust_scope_title"), classes="picker-title")
         for i, (label, detail) in enumerate(self.options):
-            key = self._LABEL_MAP.get(label.strip())
+            key = self._LABEL_MAP.get(label.strip().lstrip("› "))
             display = t(key) if key else label
             text = f"{display} -> {detail}" if detail else display
             yield Button(text, variant="warning", id=f"trust-{i}")
