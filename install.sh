@@ -201,6 +201,8 @@ EOF
     if [ -d "$DESKTOP_DIR" ]; then
         cp "$APPS_DIR/koda.desktop" "$DESKTOP_DIR/"
         chmod +x "$DESKTOP_DIR/koda.desktop" 2>/dev/null
+        # Mark as trusted so GNOME allows double-click launch
+        gio set "$DESKTOP_DIR/koda.desktop" metadata::trusted true 2>/dev/null
         ok "Desktop shortcut created"
     fi
     ok "App menu entry created"
