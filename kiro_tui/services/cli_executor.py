@@ -41,6 +41,13 @@ class CLIExecutor:
             return ["wsl", self.cli_command] + args
         return [self.cli_command] + args
 
+    @staticmethod
+    def _setup_pty_child():
+        """Set up child with PTY as controlling terminal for proper Ctrl+C."""
+        import fcntl, termios
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
     def _build_chat_cmd(self, agent=None, model=None, trusted_tools=None) -> list:
         """Build chat command with standard flags."""
         args = ["chat", "--legacy-ui", "--wrap", "never"]
@@ -107,7 +114,7 @@ class CLIExecutor:
                     [self.cli_command] + args,
                     stdin=slave, stdout=slave, stderr=slave,
                     close_fds=True, cwd=cwd,
-                    start_new_session=True
+                    preexec_fn=self._setup_pty_child
                 )
                 os.close(slave)
                 self.chat_reader_thread = threading.Thread(
@@ -381,30 +388,21 @@ class CLIExecutor:
         return False
 
     def send_interrupt(self):
-        """Send Ctrl+C interrupt through PTY/pipe (like terminal Ctrl+C)."""
-        import signal
-        # PTY: \x03 triggers SIGINT via line discipline (correct way)
+        """Send Ctrl+C through PTY (like terminal Ctrl+C)."""
         try:
             if self._pty_master is not None:
                 os.write(self._pty_master, b'\x03')
                 return True
         except Exception:
             pass
-        # Pipe (Windows): send to process group
+        # Windows/pipe fallback
+        import signal
         try:
             if self.chat_process and self.chat_process.poll() is None:
                 if IS_WINDOWS:
                     self.chat_process.send_signal(signal.CTRL_C_EVENT)
                 else:
-                    # Send to process group
                     os.killpg(os.getpgid(self.chat_process.pid), signal.SIGINT)
-                return True
-        except Exception:
-            pass
-        # Last resort: direct SIGINT
-        try:
-            if self.chat_process and self.chat_process.poll() is None:
-                os.kill(self.chat_process.pid, signal.SIGINT)
                 return True
         except Exception:
             pass
