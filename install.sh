@@ -197,13 +197,19 @@ Categories=Development;
 Icon=$ICON_PATH
 EOF
 
-    # Copy to desktop if it exists
+    # Copy to desktop — .desktop for GNOME, launcher script as fallback
     if [ -d "$DESKTOP_DIR" ]; then
         cp "$APPS_DIR/koda.desktop" "$DESKTOP_DIR/"
         chmod +x "$DESKTOP_DIR/koda.desktop" 2>/dev/null
-        # Mark as trusted so GNOME allows double-click launch
         gio set "$DESKTOP_DIR/koda.desktop" metadata::trusted true 2>/dev/null
-        ok "Desktop shortcut created"
+        # Executable launcher script (works on COSMIC and other DEs)
+        cat > "$DESKTOP_DIR/KODA.sh" << SCRIPT
+#!/bin/bash
+source "$INSTALL_DIR/venv/bin/activate"
+python -m kiro_tui.main
+SCRIPT
+        chmod +x "$DESKTOP_DIR/KODA.sh"
+        ok "Desktop shortcuts created"
     fi
     ok "App menu entry created"
 fi
