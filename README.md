@@ -42,11 +42,17 @@ koda
 - **Models** — List, switch models on the fly
 - **Prompts** — Create, edit, delete, use prompts (local and global)
 - **Chat** — Save, Load, List Sessions, Clear, Compact
-- **Tools** — Toggle tool permissions with checkboxes (Ctrl+T)
+- **Tools** — Real-time tool permissions manager (Ctrl+T)
+  - Fetches live tool list from kiro-cli (`/tools`)
+  - Checkboxes toggle trust/untrust immediately per tool
+  - Grouped by section: Built-in, MCP servers
+  - Trust All / Reset / Done buttons
+  - Trust scope picker for granularity (path / directory / entire tool)
 - **Action Prompts** — Visual Yes/No/Trust buttons for tool approvals
 - **Status Bar** — Animated spinner, agent, model, context usage
 - **Command Palette** — Ctrl+P for quick access to all commands
 - **i18n** — English, Portuguese, Spanish
+- **Cross-platform** — Linux, macOS, Windows (via WSL)
 
 ## Shortcuts
 
