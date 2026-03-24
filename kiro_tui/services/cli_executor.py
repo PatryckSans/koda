@@ -257,6 +257,9 @@ class CLIExecutor:
                 return
             if line.startswith("Tool") and "Permission" in line:
                 self._in_response = False
+                self._tools_collecting = True
+                self._tools_data = []
+                self._tools_server = None
                 return
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
