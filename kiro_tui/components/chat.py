@@ -187,8 +187,9 @@ class GhostMascot(Static):
     DEFAULT_CSS = """
     GhostMascot {
         width: auto;
-        height: 1;
-        content-align: right middle;
+        height: 3;
+        content-align: center middle;
+        border: round $primary;
         padding: 0 1;
     }
     """
@@ -232,7 +233,7 @@ class ChatArea(Container):
     #input-container {
         height: auto;
         padding: 1;
-        layout: horizontal;
+        align-horizontal: center;
     }
     
     #chat-input {
