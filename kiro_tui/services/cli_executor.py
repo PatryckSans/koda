@@ -254,11 +254,6 @@ class CLIExecutor:
                 return
             if "navigate" in line.lower() and "select" in line.lower():
                 self._in_response = False
-                if self.chat_output_callback:
-                    self.chat_output_callback(display)
-                return
-            if "navigate" in line.lower() and "select" in line.lower():
-                self._in_response = False
                 self._awaiting_trust_scope = True
                 if self.chat_output_callback:
                     self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
@@ -371,6 +366,17 @@ class CLIExecutor:
             elif line in ("Built-in", "Native"):
                 self._tools_server = None
             # Don't leak /tools output to chat
+            return
+
+        # Trust scope picker (outside response)
+        if "navigate" in line.lower() and "select" in line.lower():
+            self._awaiting_trust_scope = True
+            if self.chat_output_callback:
+                self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
+            return
+        if self._awaiting_trust_scope and "→" in line:
+            if self.chat_output_callback:
+                self.chat_output_callback(f"__TRUST_OPTION__:{line}")
             return
 
         # Strip leading "> " from response first line
