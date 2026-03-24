@@ -261,6 +261,19 @@ class CLIExecutor:
                     f.write(f"  -> FILTERED metadata\n")
                 return
             if "Thinking" in line:
+                # Windows: response may be concatenated after spinner
+                idx = line.find("Thinking...")
+                if idx >= 0:
+                    after = line[idx + len("Thinking..."):].strip()
+                    if after:
+                        if after.startswith("> "):
+                            after = after[2:]
+                        display = after
+                        if self.chat_output_callback:
+                            self.chat_output_callback(display)
+                        with open(_dl, "a", encoding="utf-8") as f:
+                            f.write(f"  -> EXTRACTED from thinking: {after[:80]!r}\n")
+                        return
                 with open(_dl, "a", encoding="utf-8") as f:
                     f.write(f"  -> FILTERED thinking\n")
                 return
@@ -309,9 +322,26 @@ class CLIExecutor:
 
         # Spinner/thinking
         if "Thinking" in line:
-            with open(_dl, "a", encoding="utf-8") as f:
-                f.write(f"  -> FILTERED thinking (outside)\n")
-            return
+            # Windows: response may be concatenated after spinner
+            idx = line.find("Thinking...")
+            if idx >= 0:
+                after = line[idx + len("Thinking..."):].strip()
+                if after:
+                    if after.startswith("> "):
+                        after = after[2:]
+                    line = after
+                    display = after
+                    with open(_dl, "a", encoding="utf-8") as f:
+                        f.write(f"  -> EXTRACTED from thinking (outside): {after[:80]!r}\n")
+                    # Fall through to process as response
+                else:
+                    with open(_dl, "a", encoding="utf-8") as f:
+                        f.write(f"  -> FILTERED thinking (outside)\n")
+                    return
+            else:
+                with open(_dl, "a", encoding="utf-8") as f:
+                    f.write(f"  -> FILTERED thinking (outside)\n")
+                return
 
         # Noise filter
         if self._is_noise(line):
