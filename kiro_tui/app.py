@@ -8,6 +8,11 @@ from kiro_tui.components.status_bar import StatusBar
 from kiro_tui.services.agent_manager import AgentManager
 from kiro_tui.services.cli_executor import CLIExecutor
 from kiro_tui.screens.project_selector import ProjectSelector
+
+_DBG_FILE = "/tmp/koda_debug.log"
+def _dbg(msg):
+    with open(_DBG_FILE, "a") as f:
+        f.write(f"{msg}\n")
 from kiro_tui.screens.login_screen import LoginScreen
 from kiro_tui.i18n import t, load_lang_from_config
 import json, os
@@ -78,11 +83,11 @@ class ToolsModal(ModalScreen):
     ToolsModal #btns { height: auto; margin-top: 1; dock: bottom; }
     """
 
-    def __init__(self, tools, send, log):
+    def __init__(self, tools, send, log_fn):
         super().__init__()
         self.tools = tools  # [(name, checked, server)]
         self.send = send
-        self.log = log
+        self._log_fn = log_fn
 
     def compose(self):
         with Vertical():
@@ -104,18 +109,18 @@ class ToolsModal(ModalScreen):
         name = event.checkbox.id[2:]  # strip "t-"
         if event.value:
             self.send(f"/tools trust {name}")
-            self.log(f"✅ trusted: {name}")
+            self._log_fn(f"✅ trusted: {name}")
         else:
             self.send(f"/tools untrust {name}")
-            self.log(f"⬜ untrusted: {name}")
+            self._log_fn(f"⬜ untrusted: {name}")
 
     def on_button_pressed(self, event):
         if event.button.id == "trust-all":
             self.send("/tools trust-all")
-            self.log("✅ trusted all tools")
+            self._log_fn("✅ trusted all tools")
         elif event.button.id == "reset":
             self.send("/tools reset")
-            self.log("🔄 tools reset")
+            self._log_fn("🔄 tools reset")
         self.dismiss()
 
 
@@ -569,10 +574,19 @@ class KodaApp(App):
     def action_toggle_tools(self):
         chat = self.query_one(ChatArea)
         send = self.cli_executor.send_chat_message
+        _dbg("action_toggle_tools called")
         def on_tools(tools):
+            _dbg(f"on_tools callback: {len(tools) if tools else 0} tools")
             if tools:
-                self.call_from_thread(self.push_screen,
-                    ToolsModal(tools, send, chat.add_log))
+                def show_modal():
+                    try:
+                        _dbg("pushing modal...")
+                        self.push_screen(ToolsModal(tools, send, chat.add_log))
+                        _dbg("modal pushed OK")
+                    except Exception as e:
+                        _dbg(f"ERROR: {e}")
+                        import traceback; _dbg(traceback.format_exc())
+                self.call_from_thread(show_modal)
             else:
                 self.call_from_thread(chat.add_log, "⚠ /tools returned empty")
         self.cli_executor.fetch_tools(on_tools)
