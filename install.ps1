@@ -108,12 +108,20 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PatryckSans/koda/main/
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/PatryckSans/koda/main/koda-logo.ico" -OutFile $iconIco -UseBasicParsing
 Write-Ok "Icon ready"
 
-# --- Desktop shortcut ---
+# --- Desktop shortcut (prefer Windows Terminal) ---
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut("$desktop\KODA.lnk")
-$shortcut.TargetPath = "cmd.exe"
-$shortcut.Arguments = "/k `"$launcher`""
+$wt = Get-Command wt.exe -ErrorAction SilentlyContinue
+if ($wt) {
+    $shortcut.TargetPath = $wt.Source
+    $shortcut.Arguments = "cmd /k `"$launcher`""
+    Write-Ok "Using Windows Terminal"
+} else {
+    $shortcut.TargetPath = "cmd.exe"
+    $shortcut.Arguments = "/k `"$launcher`""
+    Write-Warn "Windows Terminal not found, using cmd.exe"
+}
 $shortcut.WorkingDirectory = $env:USERPROFILE
 $shortcut.Description = "KODA - Kiro Operator Dashboard Application"
 if (Test-Path $iconIco) { $shortcut.IconLocation = "$iconIco,0" }
