@@ -255,6 +255,9 @@ class CLIExecutor:
             # Only filter actual metadata lines (▸ Time: 3s)
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
+            # Spinner/thinking inside response
+            if "Thinking" in line:
+                return
             if self.chat_output_callback:
                 self.chat_output_callback(display)
             return
