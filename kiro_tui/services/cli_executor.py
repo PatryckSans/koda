@@ -229,7 +229,7 @@ class CLIExecutor:
                 if self._tools_ready_callback:
                     self._tools_ready_callback()
                     self._tools_ready_callback = None
-            m = re.match(r'(\d+)%', line)
+            m = re.search(r'(\d+)%', line)
             if m:
                 self._last_context_pct = float(m.group(1))
                 if self._context_callback:
@@ -280,16 +280,16 @@ class CLIExecutor:
 
         # Filter echo of sent messages
         if self._last_sent:
-            sent = self._last_sent.rstrip()
-            if line.rstrip() == sent or (len(line) < len(sent) and line in sent):
-                self._last_sent = None
+            sent_lines = set(l.rstrip() for l in self._last_sent.split('\n') if l.strip())
+            if line.rstrip() in sent_lines:
                 return
-        if self._last_sent and self._last_sent.rstrip() in line and '>' in line:
-            sent = self._last_sent.rstrip()
-            after = line.split(sent, 1)[-1].strip()
-            if not after:
-                self._last_sent = None
-                return
+        if self._last_sent and '>' in line:
+            for sl in self._last_sent.split('\n'):
+                if sl.strip() and sl.strip() in line:
+                    after = line.split(sl.strip(), 1)[-1].strip()
+                    if not after:
+                        return
+                    break
 
         # Context usage capture
         if "% used" in line or "Context window" in line:
