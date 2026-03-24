@@ -599,7 +599,9 @@ class KodaApp(App):
         def on_tools_ready():
             tools = self.cli_executor.get_tools()
             if not tools:
-                tools = [(n, "ask", None) for n in self.BUILTIN_TOOLS]
+                self.call_from_thread(
+                    self.query_one(ChatArea).add_log, "⚠ /tools returned empty")
+                return
             original = {n: p for n, p, _ in tools}
             def on_result(result):
                 self._on_tools_result(result, original)
