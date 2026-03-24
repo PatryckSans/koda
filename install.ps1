@@ -115,11 +115,11 @@ $shortcut = $shell.CreateShortcut("$desktop\KODA.lnk")
 $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
 if ($wt) {
     $shortcut.TargetPath = $wt.Source
-    $shortcut.Arguments = "cmd /k `"$launcher`""
+    $shortcut.Arguments = "--title KODA cmd /c `"$launcher`""
     Write-Ok "Using Windows Terminal"
 } else {
     $shortcut.TargetPath = "cmd.exe"
-    $shortcut.Arguments = "/k `"$launcher`""
+    $shortcut.Arguments = "/c `"$launcher`""
     Write-Warn "Windows Terminal not found, using cmd.exe"
 }
 $shortcut.WorkingDirectory = $env:USERPROFILE
@@ -127,6 +127,14 @@ $shortcut.Description = "KODA - Kiro Operator Dashboard Application"
 if (Test-Path $iconIco) { $shortcut.IconLocation = "$iconIco,0" }
 $shortcut.Save()
 Write-Ok "Desktop shortcut created"
+
+# --- Start Menu shortcut ---
+$startMenu = [Environment]::GetFolderPath("StartMenu")
+$startDir = "$startMenu\Programs"
+if (Test-Path $startDir) {
+    Copy-Item "$desktop\KODA.lnk" "$startDir\KODA.lnk" -Force
+    Write-Ok "Start Menu shortcut created"
+}
 
 # --- Done ---
 Write-Host ""
