@@ -194,16 +194,19 @@ class GhostMascot(Static):
     }
     """
 
-    _timer = None
-    _frame = 0
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._timer = None
+        self._frame = 0
 
     def on_mount(self):
         self.update(self.IDLE)
 
     def start(self):
-        if not self._timer:
-            self._frame = 0
-            self._timer = self.set_interval(0.3, self._animate)
+        if self._timer:
+            self._timer.stop()
+        self._frame = 0
+        self._timer = self.set_interval(0.3, self._animate)
 
     def stop(self):
         if self._timer:
@@ -213,7 +216,6 @@ class GhostMascot(Static):
 
     def _animate(self):
         self._frame = (self._frame + 1) % len(self.FRAMES)
-        self.update(self.FRAMES[self._frame])
         self.update(self.FRAMES[self._frame])
 
 
