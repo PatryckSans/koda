@@ -632,11 +632,18 @@ class KodaApp(App):
     def _on_tools_result(self, result: dict):
         if not result:
             return
-        self._trusted_tools = {name for name, on in result.items() if on}
-        chat = self.query_one(ChatArea)
-        status = self.query_one(StatusBar)
-        chat.add_log("Updating tool permissions...")
-        self.run_worker(self._restart_chat(chat, status))
+        new_trusted = {name for name, on in result.items() if on}
+        old_trusted = getattr(self, '_trusted_tools', set())
+        to_trust = new_trusted - old_trusted
+        to_untrust = old_trusted - new_trusted
+        if not to_trust and not to_untrust:
+            return
+        self._trusted_tools = new_trusted
+        if to_trust:
+            self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
+        if to_untrust:
+            self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
+        self.query_one(ChatArea).add_log(t("tools_updated"))
 
     def _start_chat(self):
         """Centralized chat startup using cli_executor PTY method."""
@@ -650,15 +657,6 @@ class KodaApp(App):
             cwd=self.project_path
         )
 
-    async def _restart_chat(self, chat, status):
-        import time
-        def do_restart():
-            self._start_chat()
-            time.sleep(2)
-            return self.cli_executor.chat_process and self.cli_executor.chat_process.poll() is None
-        success = await self.run_in_thread(do_restart)
-        status.set_status(t("ready") if success else t("error"))
-    
     def on_unmount(self):
         """Clean up chat session when app closes"""
         self.cli_executor.stop_chat_session()
