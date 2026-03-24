@@ -677,13 +677,6 @@ class CLIExecutor:
         """Return cached (name, trusted) tuples."""
         return list(self._cached_tools)
 
-    def update_tools_cache(self, result: dict):
-        """Update cached tools from modal result {name: bool}."""
-        self._cached_tools = [(n, t) for n, t in self._cached_tools
-                              if n not in result]
-        self._cached_tools.extend((n, v) for n, v in result.items())
-        self._cached_tools.sort(key=lambda x: x[0])
-
     # ── Prompts ─────────────────────────────────────────────────────
 
     def prompt_list(self, project_path=None) -> list:

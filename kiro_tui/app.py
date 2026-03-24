@@ -644,8 +644,20 @@ class KodaApp(App):
             self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
         if to_untrust:
             self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
-        self.cli_executor.update_tools_cache(result)
-        self.query_one(ChatArea).add_log(t("tools_updated"))
+        chat = self.query_one(ChatArea)
+        # Refresh from kiro-cli to get actual state (allowedTools can't be untrusted)
+        import threading
+        def verify():
+            import time; time.sleep(2)
+            def on_verified():
+                actual = {n: t for n, t in self.cli_executor.get_tools()}
+                failed = [n for n in to_untrust if actual.get(n, False)]
+                if failed:
+                    self.call_from_thread(
+                        chat.add_log, f"⚠ {', '.join(failed)}: allowedTools (agent config)")
+            self.cli_executor.refresh_tools(callback=on_verified)
+        threading.Thread(target=verify, daemon=True).start()
+        chat.add_log(t("tools_updated"))
 
     def _start_chat(self):
         """Centralized chat startup using cli_executor PTY method."""
