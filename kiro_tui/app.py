@@ -62,7 +62,7 @@ class InputModal(ModalScreen[str]):
 
 
 class ToolsModal(ModalScreen[dict]):
-    """Modal to view and toggle tools"""
+    """Modal to view and toggle tools — 3 permission levels, grouped by server"""
     
     DEFAULT_CSS = """
     ToolsModal { align: center middle; }
@@ -73,36 +73,46 @@ class ToolsModal(ModalScreen[dict]):
     ToolsModal #tools-title { height: auto; margin-bottom: 1; }
     ToolsModal #tools-scroll { height: 1fr; border: solid $primary-darken-2; }
     ToolsModal #tools-scroll Checkbox { margin: 0; padding: 0 1; }
+    ToolsModal .tools-section { height: auto; margin: 0 0 0 1; color: $text-muted; }
     ToolsModal #tools-buttons { height: auto; margin-top: 1; dock: bottom; }
     """
     
-    def __init__(self, tools: list, locked: set = None):
+    def __init__(self, tools: list):
+        """tools: list of (name, permission, server) tuples"""
         super().__init__()
         self.tools = tools
-        self.locked = locked or set()
         self.checkboxes = {}
     
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Label(t("tools_title"), id="tools-title")
             with VerticalScroll(id="tools-scroll"):
-                for name, trusted in self.tools:
-                    is_locked = self._is_locked(name)
-                    label = f"{name} 🔒" if is_locked else name
-                    cb = Checkbox(label, value=trusted, id=f"tool-{name}")
-                    if is_locked:
+                current_section = "__none__"
+                for name, perm, server in self.tools:
+                    section = server or "Built-in"
+                    if section != current_section:
+                        current_section = section
+                        yield Label(section, classes="tools-section")
+                    locked = perm == "allowed"
+                    label = f"{name} 🔒" if locked else name
+                    cb = Checkbox(label, value=perm in ("trusted", "allowed"), id=f"tool-{name}")
+                    if locked:
                         cb.disabled = True
                     self.checkboxes[name] = cb
                     yield cb
             with Horizontal(id="tools-buttons"):
+                yield Button("Trust All", variant="warning", id="trust-all")
+                yield Button("Reset", id="reset")
                 yield Button("Apply", variant="primary", id="apply")
-                yield Button("Cancel", id="cancel")
-
-    def _is_locked(self, tool_name: str) -> bool:
-        return tool_name in self.locked
+                yield Button(t("cancel"), id="cancel")
     
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "apply":
+        bid = event.button.id
+        if bid == "trust-all":
+            self.dismiss({"__action__": "trust-all"})
+        elif bid == "reset":
+            self.dismiss({"__action__": "reset"})
+        elif bid == "apply":
             result = {name: cb.value for name, cb in self.checkboxes.items()}
             self.dismiss(result)
         else:
@@ -585,30 +595,16 @@ class KodaApp(App):
             self.push_screen(ConfirmQuitModal(), on_quit)
 
     def action_toggle_tools(self):
-        """Show tools modal — fetches current tools from agent first"""
+        """Show tools modal — fetches current tools from kiro-cli"""
         def on_tools_ready():
             tools = self.cli_executor.get_tools()
             if not tools:
-                tools = [(n, False) for n in self.BUILTIN_TOOLS]
-            # Build locked set from agent's allowedTools + server map
-            allowed = self.agent_manager.get_allowed_tools()
-            server_map = self.cli_executor.get_tools_server_map()
-            # Alias map: /tools display name -> allowedTools canonical name
-            _ALIASES = {"shell": "execute_bash", "read": "fs_read", "write": "fs_write",
-                        "todo": "todo_list", "subagent": "use_subagent", "aws": "use_aws",
-                        "report": "report_issue"}
-            locked = set()
-            for name, _ in tools:
-                canonical = _ALIASES.get(name, name)
-                if name in allowed or canonical in allowed:
-                    locked.add(name)
-                elif server_map.get(name) in allowed:
-                    locked.add(name)
-            original = {n: t for n, t in tools}
+                tools = [(n, "ask", None) for n in self.BUILTIN_TOOLS]
+            original = {n: p for n, p, _ in tools}
             def on_result(result):
                 self._on_tools_result(result, original)
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools, locked), on_result)
+                ToolsModal(tools), on_result)
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
@@ -657,8 +653,18 @@ class KodaApp(App):
     def _on_tools_result(self, result: dict, original: dict):
         if not result:
             return
-        to_trust = [n for n, on in result.items() if on and not original.get(n, False)]
-        to_untrust = [n for n, on in result.items() if not on and original.get(n, False)]
+        action = result.get("__action__")
+        if action == "trust-all":
+            self.cli_executor.send_chat_message("/tools trust-all")
+            self.query_one(ChatArea).add_log(t("tools_updated"))
+            return
+        if action == "reset":
+            self.cli_executor.send_chat_message("/tools reset")
+            self.query_one(ChatArea).add_log(t("tools_updated"))
+            return
+        # Normal diff: compare checkbox state vs original permission
+        to_trust = [n for n, on in result.items() if on and original.get(n) == "ask"]
+        to_untrust = [n for n, on in result.items() if not on and original.get(n) == "trusted"]
         if not to_trust and not to_untrust:
             return
         if to_trust:

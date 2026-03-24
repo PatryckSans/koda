@@ -30,8 +30,7 @@ class CLIExecutor:
         self._pty_master = None
         self._last_sent = None  # for echo filtering
         self._context_callback = None
-        self._cached_tools = []  # (name, trusted) tuples from /tools
-        self._tools_server_map = {}  # tool_name -> @server or None
+        self._cached_tools = []  # (name, permission, server) tuples from /tools
         self._collecting_tools = False
         self._tools_ready_callback = None
         self._tools_current_server = None
@@ -269,6 +268,7 @@ class CLIExecutor:
                 self._in_response = False
                 self._collecting_tools = True
                 self._cached_tools = []
+                self._tools_current_server = None
                 return
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
@@ -355,7 +355,6 @@ class CLIExecutor:
         if line.startswith("Tool") and "Permission" in line:
             self._collecting_tools = True
             self._cached_tools = []
-            self._tools_server_map = {}
             self._tools_current_server = None
             return
         if self._collecting_tools:
@@ -365,12 +364,16 @@ class CLIExecutor:
             m_tool = self._TOOL_LINE_RE.match(line)
             if m_tool:
                 name = m_tool.group(1)
-                trusted = "not trusted" not in line
-                self._cached_tools.append((name, trusted))
-                if self._tools_current_server:
-                    self._tools_server_map[name] = self._tools_current_server
+                # Parse permission: "trusted", "allowed", or "ask"
+                ll = line.lower()
+                if "trusted" in ll:
+                    perm = "trusted"
+                elif "allowed" in ll:
+                    perm = "allowed"
+                else:
+                    perm = "ask"
+                self._cached_tools.append((name, perm, self._tools_current_server))
                 return
-            # Section headers: "Built-in", "shadcn-ui (MCP)", etc.
             if "(MCP)" in line:
                 self._tools_current_server = "@" + line.split("(MCP)")[0].strip()
                 return
@@ -683,12 +686,8 @@ class CLIExecutor:
         self.send_chat_message("/tools")
 
     def get_tools(self) -> list:
-        """Return cached (name, trusted) tuples."""
+        """Return cached (name, permission, server) tuples."""
         return list(self._cached_tools)
-
-    def get_tools_server_map(self) -> dict:
-        """Return {tool_name: '@server'} for MCP tools."""
-        return dict(self._tools_server_map)
 
     # ── Prompts ─────────────────────────────────────────────────────
 
