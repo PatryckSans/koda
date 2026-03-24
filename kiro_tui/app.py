@@ -599,6 +599,7 @@ class KodaApp(App):
         
         if success:
             status.set_status(t("thinking"))
+            chat.start_ghost()
             # Poll context after a delay to let response complete
             import threading
             def delayed_poll():

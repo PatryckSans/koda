@@ -264,8 +264,6 @@ class ChatArea(Container):
             self.add_message(event.value, "user")
             self.post_message(self.MessageSubmitted(event.value))
             event.input.value = ""
-            self.query_one("#ghost", GhostMascot).start()
-            event.input.value = ""
     
     def add_message(self, content: str, role: str = "user"):
         """Add a message to the chat"""
@@ -291,6 +289,12 @@ class ChatArea(Container):
         self._current_response = None
         try:
             self.query_one("#ghost", GhostMascot).stop()
+        except Exception:
+            pass
+
+    def start_ghost(self):
+        try:
+            self.query_one("#ghost", GhostMascot).start()
         except Exception:
             pass
     
