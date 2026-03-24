@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser("~/.config/koda/config.json")
 
 def _load_config():
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8")as f:
             return json.load(f)
     except Exception:
         return {}
@@ -20,7 +20,7 @@ def _load_config():
 
 def _save_config(data):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    with open(CONFIG_PATH, "w", encoding="utf-8")as f:
         json.dump(data, f)
 
 

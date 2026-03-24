@@ -677,7 +677,7 @@ class CLIExecutor:
     def prompt_create(self, name, content, project_path=None, is_global=False):
         base = os.path.expanduser("~/.kiro/prompts") if is_global else os.path.join(project_path or ".", ".kiro", "prompts")
         os.makedirs(base, exist_ok=True)
-        with open(os.path.join(base, f"{name}.md"), "w") as f:
+        with open(os.path.join(base, f"{name}.md"), "w", encoding="utf-8") as f:
             f.write(content)
         return True
 
@@ -693,10 +693,10 @@ class CLIExecutor:
         if project_path:
             local = os.path.join(project_path, ".kiro", "prompts", f"{name}.md")
             if os.path.exists(local):
-                return open(local).read(), False
+                return open(local, encoding="utf-8").read(), False
         g = os.path.join(os.path.expanduser("~/.kiro/prompts"), f"{name}.md")
         if os.path.exists(g):
-            return open(g).read(), True
+            return open(g, encoding="utf-8").read(), True
         return "", False
 
     # ── Auth ────────────────────────────────────────────────────────

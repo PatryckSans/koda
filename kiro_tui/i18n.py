@@ -149,7 +149,7 @@ def t(key: str, **kwargs) -> str:
 
 def load_lang_from_config():
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8")as f:
             cfg = json.load(f)
             set_lang(cfg.get("language", "en"))
     except Exception:
@@ -158,11 +158,11 @@ def load_lang_from_config():
 
 def save_lang_to_config(lang: str):
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8")as f:
             cfg = json.load(f)
     except Exception:
         cfg = {}
     cfg["language"] = lang
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    with open(CONFIG_PATH, "w", encoding="utf-8")as f:
         json.dump(cfg, f)

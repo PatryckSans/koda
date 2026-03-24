@@ -16,14 +16,14 @@ CONFIG_PATH = os.path.expanduser("~/.config/koda/config.json")
 
 def _load_config():
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8")as f:
             return json.load(f)
     except Exception:
         return {}
 
 def _save_config(data):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    with open(CONFIG_PATH, "w", encoding="utf-8")as f:
         json.dump(data, f)
 
 
@@ -568,7 +568,7 @@ class KodaApp(App):
                 fpath = os.path.join(self.project_path, f)
                 if os.path.isfile(fpath) and not f.startswith("."):
                     try:
-                        with open(fpath, "r") as fh:
+                        with open(fpath, "r", encoding="utf-8")as fh:
                             if "conversation_id" in fh.read(200):
                                 existing.append(f)
                     except Exception:
@@ -791,7 +791,7 @@ class KodaApp(App):
                 fpath = os.path.join(self.project_path, f)
                 if os.path.isfile(fpath) and not f.startswith("."):
                     try:
-                        with open(fpath, "r") as fh:
+                        with open(fpath, "r", encoding="utf-8")as fh:
                             if "conversation_id" in fh.read(200):
                                 existing.append(f)
                     except Exception:
@@ -810,7 +810,7 @@ class KodaApp(App):
                 fpath = os.path.join(self.project_path, f)
                 if os.path.isfile(fpath) and not f.startswith("."):
                     try:
-                        with open(fpath, "r") as fh:
+                        with open(fpath, "r", encoding="utf-8")as fh:
                             if "conversation_id" in fh.read(200):
                                 chat_files.append(f)
                     except Exception:
@@ -935,7 +935,7 @@ class KodaApp(App):
         try:
             data = {}
             if os.path.exists(cfg_path):
-                with open(cfg_path) as f:
+                with open(cfg_path, encoding="utf-8")as f:
                     data = json.load(f)
             required = {
                 "chat.enableKnowledge": True,
@@ -948,7 +948,7 @@ class KodaApp(App):
                 return
             data.update(required)
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
-            with open(cfg_path, "w") as f:
+            with open(cfg_path, "w", encoding="utf-8")as f:
                 json.dump(data, f, indent=2)
         except Exception:
             pass
