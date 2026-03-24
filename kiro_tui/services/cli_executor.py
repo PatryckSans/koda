@@ -33,6 +33,7 @@ class CLIExecutor:
         self._cached_tools = []  # (name, trusted) tuples from /tools
         self._collecting_tools = False
         self._tools_ready_callback = None
+        self._tools_current_server = None
         self._in_response = False
         self._awaiting_trust_options = False
 
@@ -267,6 +268,7 @@ class CLIExecutor:
                 self._in_response = False
                 self._collecting_tools = True
                 self._cached_tools = []
+                self._tools_current_server = None
                 return
             if line.startswith("▸ ") and re.match(r'^▸\s+(Time|Cost|Tokens)', line):
                 return
@@ -343,22 +345,35 @@ class CLIExecutor:
         if self._is_noise(line):
             return
 
-        # /tools trust/untrust confirmation
-        if "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line:
+        # /tools trust/untrust confirmation and echo
+        if "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line or "are set to per-request" in line:
+            return
+        if line.startswith("/tools") or (self._last_sent and self._last_sent.startswith("/tools") and all(w.replace("@","").replace("/","").replace("-","").replace("_","").isalnum() for w in line.split())):
             return
 
         # /tools output
         if line.startswith("Tool") and "Permission" in line:
             self._collecting_tools = True
             self._cached_tools = []
+            self._tools_current_server = None
             return
         if self._collecting_tools:
             if line.startswith("Total"):
                 self._tools_last_total_time = time.time()
                 return
+            # MCP server header: @server-name
+            if line.startswith("@"):
+                self._tools_current_server = line.strip()
+                return
+            # Built-in section header
+            if line in ("Built-in", "Native"):
+                self._tools_current_server = None
+                return
             m_tool = self._TOOL_LINE_RE.match(line)
             if m_tool:
                 name = m_tool.group(1)
+                if self._tools_current_server:
+                    name = f"{self._tools_current_server}/{name}"
                 trusted = "not trusted" not in line
                 self._cached_tools.append((name, trusted))
                 return
@@ -665,6 +680,8 @@ class CLIExecutor:
 
     def refresh_tools(self, callback=None):
         """Send /tools to populate cached tool list. Optional callback when done."""
+        self._collecting_tools = False
+        self._tools_current_server = None
         self._tools_ready_callback = callback
         self.send_chat_message("/tools")
 
