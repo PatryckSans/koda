@@ -436,8 +436,10 @@ class KodaApp(App):
         if line.startswith("__CONTEXT__:"):
             pct = float(line.split(":", 1)[1])
             self.call_from_thread(status.set_context, pct)
-            self.call_from_thread(status.set_status, t("ready"))
-            self.call_from_thread(chat.stop_ghost)
+            # Only stop ghost/status when response was received (not echo prompt)
+            if getattr(self, '_response_lines', None):
+                self._end_response()
+                self.call_from_thread(status.set_status, t("ready"))
             return
 
         # Trust picker detection
@@ -479,7 +481,6 @@ class KodaApp(App):
             self.call_from_thread(chat.add_message, full, "assistant")
         else:
             self.call_from_thread(chat.update_response, full)
-        self.call_from_thread(status.set_status, t("ready"))
 
     def _end_response(self):
         """Finalize current response accumulation."""
