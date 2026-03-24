@@ -88,7 +88,7 @@ class CLIExecutor:
 
             if IS_WINDOWS:
                 # Use wsl script to allocate PTY inside WSL
-                inner = f"{self.cli_command} {' '.join(args)}"
+                inner = f"export LANG=C.UTF-8 LC_ALL=C.UTF-8; {self.cli_command} {' '.join(args)}"
                 cmd = ["wsl", "script", "-qc", inner, "/dev/null"]
                 self.chat_process = subprocess.Popen(
                     cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
