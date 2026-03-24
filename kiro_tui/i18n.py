@@ -79,6 +79,7 @@ STRINGS = {
     # Chat actions feedback
     "chat_cleared": {"en": "Chat cleared", "pt": "Chat limpo", "es": "Chat limpiado"},
     "confirm_clear": {"en": "Clear chat history?", "pt": "Limpar histórico do chat?", "es": "¿Limpiar historial del chat?"},
+    "clear_action": {"en": "Clear", "pt": "Limpar", "es": "Limpiar"},
     "compact_sent": {"en": "Compact sent", "pt": "Compactar enviado", "es": "Compactar enviado"},
     "saved_as": {"en": "Chat saved as: {name}", "pt": "Chat salvo como: {name}", "es": "Chat guardado como: {name}"},
     "loading_chat": {"en": "Loading chat: {name}", "pt": "Carregando chat: {name}", "es": "Cargando chat: {name}"},

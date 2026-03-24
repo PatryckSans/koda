@@ -230,16 +230,18 @@ class ConfirmModal(ModalScreen[bool]):
     """
     BINDINGS = [("escape", "cancel", "Close")]
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, confirm_label: str = None, cancel_label: str = None):
         super().__init__()
         self._message = message
+        self._confirm = confirm_label or t("yes")
+        self._cancel = cancel_label or t("cancel")
 
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Label(self._message)
             with Horizontal():
-                yield Button(t("yes"), variant="error", id="confirm-yes")
-                yield Button(t("no"), id="confirm-no")
+                yield Button(self._confirm, variant="error", id="confirm-yes")
+                yield Button(self._cancel, id="confirm-no")
 
     def on_button_pressed(self, event: Button.Pressed):
         self.dismiss(event.button.id == "confirm-yes")
@@ -615,7 +617,7 @@ class KodaApp(App):
                 chat = self.query_one(ChatArea)
                 chat.query_one("#messages").remove_children()
                 chat.add_log(t("chat_cleared"))
-        self.push_screen(ConfirmModal(t("confirm_clear")), on_confirm)
+        self.push_screen(ConfirmModal(t("confirm_clear"), t("clear_action"), t("cancel")), on_confirm)
 
     def action_compact_chat(self):
         """Compact chat"""
