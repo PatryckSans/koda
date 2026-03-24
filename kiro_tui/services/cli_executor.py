@@ -43,7 +43,7 @@ class CLIExecutor:
 
     def _build_chat_cmd(self, agent=None, model=None, trusted_tools=None) -> list:
         """Build chat command with standard flags."""
-        args = ["chat", "--legacy-ui", "--wrap", "never", "--trust-all-tools"]
+        args = ["chat", "--legacy-ui", "--wrap", "never"]
         if agent:
             args += ["--agent", agent]
         if model and model != "auto":
