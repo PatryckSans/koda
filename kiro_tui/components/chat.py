@@ -214,6 +214,7 @@ class GhostMascot(Static):
     def _animate(self):
         self._frame = (self._frame + 1) % len(self.FRAMES)
         self.update(self.FRAMES[self._frame])
+        self.update(self.FRAMES[self._frame])
 
 
 class ChatArea(Container):
