@@ -227,7 +227,8 @@ class CLIExecutor:
                 self._last_context_pct = float(m.group(1))
                 if self._context_callback:
                     self._context_callback(self._last_context_pct)
-                elif self.chat_output_callback:
+                    self._context_callback = None
+                if self.chat_output_callback:
                     self.chat_output_callback(f"__CONTEXT__:{self._last_context_pct}")
             return
 
