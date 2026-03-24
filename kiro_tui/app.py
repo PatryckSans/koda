@@ -970,6 +970,7 @@ class KodaApp(App):
             self.cli_executor.send_chat_message(f"/prompts get {name}")
             self.query_one(ChatArea).add_log(t("prompt_sent", name=name))
             self.query_one(StatusBar).set_status(t("thinking"))
+            self.query_one(ChatArea).start_ghost()
 
     def _on_manager_result(self, result: str):
         if not result:
