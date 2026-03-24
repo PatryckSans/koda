@@ -969,10 +969,12 @@ class KodaApp(App):
             name = label_text.split("] ", 1)[-1].strip()
             content, _ = self.cli_executor.prompt_read(name, self.project_path)
             if content:
+                chat = self.query_one(ChatArea)
+                chat.add_message(content, "user")
                 self.cli_executor.send_chat_message(content)
-                self.query_one(ChatArea).add_log(t("prompt_sent", name=name))
+                chat.add_log(t("prompt_sent", name=name))
                 self.query_one(StatusBar).set_status(t("thinking"))
-                self.query_one(ChatArea).start_ghost()
+                chat.start_ghost()
 
     def _on_manager_result(self, result: str):
         if not result:
