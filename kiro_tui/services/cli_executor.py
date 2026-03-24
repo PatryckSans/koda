@@ -207,6 +207,10 @@ class CLIExecutor:
         """Process a single line of chat output."""
         line = self._clean(raw)
         display = self._clean_display(raw)
+        # DEBUG
+        import time
+        with open(__import__("os").path.expanduser("~/koda_debug.log"), "a") as f:
+            f.write(f"{time.time():.3f} _process_line in_resp={self._in_response} line={line[:100]!r}\n")
         if not line:
             # Allow empty lines through during response (paragraph breaks)
             if self._in_response:

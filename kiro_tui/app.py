@@ -403,6 +403,10 @@ class KodaApp(App):
     
     def _chat_output_handler(self, line: str):
         """Handle chat output: accumulate response into single Markdown widget."""
+        # DEBUG
+        import time
+        with open(__import__("os").path.expanduser("~/koda_debug.log"), "a") as f:
+            f.write(f"{time.time():.3f} _chat_output_handler line={line[:100]!r}\n")
         # Deduplicate consecutive identical lines
         if line == getattr(self, '_last_chat_line', None):
             return
