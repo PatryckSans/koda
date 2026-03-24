@@ -31,6 +31,7 @@ class CLIExecutor:
         self._last_sent = None  # for echo filtering
         self._context_callback = None
         self._in_response = False
+        self._awaiting_trust_scope = False
         self._tools_collecting = False
         self._tools_callback = None
         self._tools_data = []
@@ -255,6 +256,16 @@ class CLIExecutor:
                 self._in_response = False
                 if self.chat_output_callback:
                     self.chat_output_callback(display)
+                return
+            if "navigate" in line.lower() and "select" in line.lower():
+                self._in_response = False
+                self._awaiting_trust_scope = True
+                if self.chat_output_callback:
+                    self.chat_output_callback(f"__TRUST_PICKER__:{raw}")
+                return
+            if self._awaiting_trust_scope and "→" in line:
+                if self.chat_output_callback:
+                    self.chat_output_callback(f"__TRUST_OPTION__:{line}")
                 return
             if line.startswith("Tool") and "Permission" in line:
                 self._in_response = False

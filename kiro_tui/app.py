@@ -496,6 +496,25 @@ class KodaApp(App):
                 self.call_from_thread(status.set_status, t("ready"))
             return
 
+        # Trust scope picker (granularity selection after trusting a tool)
+        if line.startswith("__TRUST_PICKER__:"):
+            self._trust_options = []
+            return
+        if line.startswith("__TRUST_OPTION__:"):
+            opt = line[len("__TRUST_OPTION__:"):]
+            opt = opt.lstrip("> ").strip()
+            if "→" in opt:
+                label, detail = opt.split("→", 1)
+                self._trust_options.append((label.strip(), detail.strip()))
+            else:
+                self._trust_options.append((opt, ""))
+            def _schedule_picker():
+                if hasattr(self, '_trust_timer'):
+                    self._trust_timer.stop()
+                self._trust_timer = self.set_timer(0.5, self._show_trust_picker)
+            self.call_from_thread(_schedule_picker)
+            return
+
         # Action prompt — finalize current response first
         if "Allow this action" in line or "[y/n" in line:
             self._end_response()
@@ -675,6 +694,7 @@ class KodaApp(App):
 
     def on_trust_picker_trust_selected(self, event: TrustPicker.TrustSelected):
         """Handle trust scope selection - send arrow downs + Enter."""
+        self.cli_executor._awaiting_trust_scope = False
         for _ in range(event.index):
             self.cli_executor.send_raw(b'\x1b[B')  # arrow down
         self.cli_executor.send_raw(b'\r')  # Enter
