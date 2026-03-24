@@ -106,7 +106,8 @@ class CLIExecutor:
                 self.chat_process = subprocess.Popen(
                     [self.cli_command] + args,
                     stdin=slave, stdout=slave, stderr=slave,
-                    close_fds=True, cwd=cwd
+                    close_fds=True, cwd=cwd,
+                    start_new_session=True
                 )
                 os.close(slave)
                 self.chat_reader_thread = threading.Thread(
@@ -380,25 +381,30 @@ class CLIExecutor:
         return False
 
     def send_interrupt(self):
-        """Send SIGINT to interrupt current processing."""
+        """Send Ctrl+C interrupt through PTY/pipe (like terminal Ctrl+C)."""
         import signal
+        # PTY: \x03 triggers SIGINT via line discipline (correct way)
+        try:
+            if self._pty_master is not None:
+                os.write(self._pty_master, b'\x03')
+                return True
+        except Exception:
+            pass
+        # Pipe (Windows): send to process group
         try:
             if self.chat_process and self.chat_process.poll() is None:
                 if IS_WINDOWS:
                     self.chat_process.send_signal(signal.CTRL_C_EVENT)
                 else:
-                    os.kill(self.chat_process.pid, signal.SIGINT)
+                    # Send to process group
+                    os.killpg(os.getpgid(self.chat_process.pid), signal.SIGINT)
                 return True
         except Exception:
             pass
-        # Fallback: send \x03 through PTY/pipe
+        # Last resort: direct SIGINT
         try:
-            if self._pty_master is not None:
-                os.write(self._pty_master, b'\x03')
-                return True
-            elif self.chat_process and self.chat_process.poll() is None:
-                self.chat_process.stdin.buffer.write(b'\x03')
-                self.chat_process.stdin.flush()
+            if self.chat_process and self.chat_process.poll() is None:
+                os.kill(self.chat_process.pid, signal.SIGINT)
                 return True
         except Exception:
             pass
