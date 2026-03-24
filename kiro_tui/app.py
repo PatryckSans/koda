@@ -670,7 +670,7 @@ class KodaApp(App):
         self.agent_manager.active_agent = agent_name
         
         # Switch agent within existing session to preserve context
-        self.cli_executor.send_chat_message(f"/agent {agent_name}")
+        self.cli_executor.send_chat_message(f"/agent swap {agent_name}")
         
         status.set_agent(agent_name)
         status.set_status(t("ready"))
