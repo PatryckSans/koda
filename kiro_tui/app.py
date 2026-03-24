@@ -779,8 +779,9 @@ class KodaApp(App):
         self.notify(t("now_model", name=model_name), severity="information")
         
         # Refresh model list to update indicator
-        models = self.cli_executor.list_models()
-        self.query_one(ModelsSection).update_models(models, model_name)
+        success, models = self.cli_executor.model_list()
+        if success:
+            self.query_one(ModelsSection).update_models(models, model_name)
     
     async def handle_chat_action(self, label_text: str):
         """Handle chat action from sidebar"""
