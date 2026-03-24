@@ -964,13 +964,15 @@ class KodaApp(App):
             prompts = self.cli_executor.prompt_list(self.project_path)
             self.push_screen(PromptsManagerModal(prompts), callback=self._on_manager_result)
         else:
-            # Direct send
+            # Direct send — read content ourselves to avoid kiro-cli UTF-8 issues
             self._end_response()
             name = label_text.split("] ", 1)[-1].strip()
-            self.cli_executor.send_chat_message(f"/prompts get {name}")
-            self.query_one(ChatArea).add_log(t("prompt_sent", name=name))
-            self.query_one(StatusBar).set_status(t("thinking"))
-            self.query_one(ChatArea).start_ghost()
+            content, _ = self.cli_executor.prompt_read(name, self.project_path)
+            if content:
+                self.cli_executor.send_chat_message(content)
+                self.query_one(ChatArea).add_log(t("prompt_sent", name=name))
+                self.query_one(StatusBar).set_status(t("thinking"))
+                self.query_one(ChatArea).start_ghost()
 
     def _on_manager_result(self, result: str):
         if not result:
