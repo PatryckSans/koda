@@ -195,29 +195,25 @@ class GhostMascot(Static):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._timer = None
         self._frame = 0
+        self._animating = False
 
     def on_mount(self):
         self.update(self.IDLE)
 
     def start(self):
-        if self._timer:
-            self._timer.stop()
+        self._animating = True
         self._frame = 0
-        self._timer = self.set_interval(0.1, self._animate)
 
     def stop(self):
-        if self._timer:
-            self._timer.stop()
-            self._timer = None
+        self._animating = False
         self.update(self.IDLE)
-        self.refresh()
 
-    def _animate(self):
+    def tick(self):
+        if not self._animating:
+            return
         self._frame = (self._frame + 1) % len(self.FRAMES)
         self.update(self.FRAMES[self._frame])
-        self.refresh()
 
 
 class ChatArea(Container):
@@ -257,6 +253,15 @@ class ChatArea(Container):
         with Vertical(id="input-container"):
             yield Input(placeholder=t("type_message"), id="chat-input")
             yield GhostMascot(id="ghost")
+
+    def on_mount(self):
+        self._ghost_timer = self.set_interval(0.15, self._tick_ghost)
+
+    def _tick_ghost(self):
+        try:
+            self.query_one("#ghost", GhostMascot).tick()
+        except Exception:
+            pass
     
     def on_input_submitted(self, event: Input.Submitted):
         """Handle input submission"""

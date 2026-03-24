@@ -414,7 +414,9 @@ class KodaApp(App):
         # Context percentage update
         if line.startswith("__CONTEXT__:"):
             pct = float(line.split(":", 1)[1])
+            self._end_response()
             self.call_from_thread(status.set_context, pct)
+            self.call_from_thread(status.set_status, t("ready"))
             return
 
         # Trust picker detection
@@ -463,7 +465,11 @@ class KodaApp(App):
         self._response_lines = []
         self._last_chat_line = None
         try:
-            self.call_from_thread(self.query_one(ChatArea).end_response)
+            chat = self.query_one(ChatArea)
+            try:
+                self.call_from_thread(chat.end_response)
+            except RuntimeError:
+                chat.end_response()
         except Exception:
             pass
 
