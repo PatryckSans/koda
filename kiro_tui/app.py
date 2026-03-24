@@ -223,6 +223,27 @@ class PromptsManagerModal(ModalScreen[str]):
             self.dismiss("")
 
 
+class ConfirmQuitModal(ModalScreen[bool]):
+    DEFAULT_CSS = """
+    ConfirmQuitModal { align: center middle; }
+    ConfirmQuitModal > Vertical { width: 50; height: auto; border: thick $primary; background: $surface; padding: 1 2; }
+    """
+    BINDINGS = [("escape", "dismiss_quit", "Close")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(t("confirm_quit"))
+            with Horizontal():
+                yield Button(t("yes"), variant="error", id="quit-yes")
+                yield Button(t("no"), id="quit-no")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.dismiss(event.button.id == "quit-yes")
+
+    def action_dismiss_quit(self):
+        self.dismiss(True)
+
+
 class KodaApp(App):
     """KODA | Kiro Operator Dashboard Application"""
 
@@ -249,8 +270,8 @@ class KodaApp(App):
     """
     
     BINDINGS = [
-        ("escape", "quit", "Quit"),
-        ("ctrl+c", "quit", "Quit"),
+        ("escape", "handle_escape", "Quit"),
+        ("ctrl+c", "handle_escape", "Quit"),
         ("ctrl+t", "toggle_tools", "Tools"),
         ("ctrl+s", "save_chat", "Save Chat"),
         ("ctrl+l", "clear_chat", "Clear Chat"),
@@ -486,6 +507,28 @@ class KodaApp(App):
         "knowledge", "session", "thinking", "todo",
         "subagent", "web_fetch", "web_search",
     ]
+
+    def _is_processing(self) -> bool:
+        """Check if kiro is currently processing (spinner active)."""
+        try:
+            sb = self.query_one(StatusBar)
+            return sb._spinner_timer is not None
+        except Exception:
+            return False
+
+    def action_handle_escape(self):
+        if self._is_processing():
+            self.cli_executor.send_interrupt()
+            self._end_response()
+            chat = self.query_one(ChatArea)
+            chat.end_response()
+            chat.stop_ghost()
+            self.query_one(StatusBar).set_status(t("ready"))
+        else:
+            def on_quit(result: bool) -> None:
+                if result:
+                    self.exit()
+            self.push_screen(ConfirmQuitModal(), on_quit)
 
     def action_toggle_tools(self):
         """Show tools modal — fetches current tools from agent first"""

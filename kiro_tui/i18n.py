@@ -40,6 +40,9 @@ STRINGS = {
 
     # Status / Logs
     "ready": {"en": "Ready", "pt": "Pronto", "es": "Listo"},
+    "confirm_quit": {"en": "Close KODA?", "pt": "Deseja fechar o KODA?", "es": "¿Cerrar KODA?"},
+    "yes": {"en": "Close", "pt": "Fechar", "es": "Cerrar"},
+    "no": {"en": "Cancel", "pt": "Cancelar", "es": "Cancelar"},
     "thinking": {"en": "Thinking...", "pt": "Pensando...", "es": "Pensando..."},
     "starting_chat": {"en": "Initializing Kiro CLI chat session...", "pt": "Iniciando sessao de chat Kiro CLI...", "es": "Iniciando sesion de chat Kiro CLI..."},
     "chat_active": {"en": "Chat session active", "pt": "Sessao de chat ativa", "es": "Sesion de chat activa"},

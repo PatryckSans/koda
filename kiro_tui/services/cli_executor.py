@@ -379,6 +379,20 @@ class CLIExecutor:
             pass
         return False
 
+    def send_interrupt(self):
+        """Send Ctrl+C (SIGINT) to interrupt current processing."""
+        try:
+            if self._pty_master is not None:
+                os.write(self._pty_master, b'\x03')
+                return True
+            elif self.chat_process and self.chat_process.poll() is None:
+                self.chat_process.stdin.buffer.write(b'\x03')
+                self.chat_process.stdin.flush()
+                return True
+        except Exception:
+            pass
+        return False
+
     def send_raw(self, data: bytes) -> bool:
         """Send raw bytes (escape sequences for trust picker)."""
         try:
