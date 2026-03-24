@@ -61,8 +61,8 @@ class InputModal(ModalScreen[str]):
         self.dismiss(event.value)
 
 
-class ToolsModal(ModalScreen[dict]):
-    """Modal to view and toggle tools — 3 permission levels, grouped by server"""
+class ToolsModal(ModalScreen):
+    """Modal to view and toggle tools — sends trust/untrust immediately"""
     
     DEFAULT_CSS = """
     ToolsModal { align: center middle; }
@@ -77,11 +77,11 @@ class ToolsModal(ModalScreen[dict]):
     ToolsModal #tools-buttons { height: auto; margin-top: 1; dock: bottom; }
     """
     
-    def __init__(self, tools: list):
-        """tools: list of (name, permission, server) tuples"""
+    def __init__(self, tools: list, send_fn):
+        """tools: (name, perm, server) tuples. send_fn: sends command to kiro-cli."""
         super().__init__()
         self.tools = tools
-        self.checkboxes = {}
+        self.send = send_fn
     
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -98,25 +98,29 @@ class ToolsModal(ModalScreen[dict]):
                     cb = Checkbox(label, value=perm in ("trusted", "allowed"), id=f"tool-{name}")
                     if locked:
                         cb.disabled = True
-                    self.checkboxes[name] = cb
                     yield cb
             with Horizontal(id="tools-buttons"):
                 yield Button("Trust All", variant="warning", id="trust-all")
                 yield Button("Reset", id="reset")
-                yield Button("Apply", variant="primary", id="apply")
-                yield Button(t("cancel"), id="cancel")
+                yield Button(t("cancel"), id="close")
+    
+    def on_checkbox_changed(self, event: Checkbox.Changed):
+        name = event.checkbox.id.removeprefix("tool-")
+        if event.value:
+            self.send(f"/tools trust {name}")
+        else:
+            self.send(f"/tools untrust {name}")
     
     def on_button_pressed(self, event: Button.Pressed):
         bid = event.button.id
         if bid == "trust-all":
-            self.dismiss({"__action__": "trust-all"})
+            self.send("/tools trust-all")
+            self.dismiss()
         elif bid == "reset":
-            self.dismiss({"__action__": "reset"})
-        elif bid == "apply":
-            result = {name: cb.value for name, cb in self.checkboxes.items()}
-            self.dismiss(result)
+            self.send("/tools reset")
+            self.dismiss()
         else:
-            self.dismiss({})
+            self.dismiss()
 
 
 class SaveModal(ModalScreen[str]):
@@ -602,11 +606,8 @@ class KodaApp(App):
                 self.call_from_thread(
                     self.query_one(ChatArea).add_log, "⚠ /tools returned empty")
                 return
-            original = {n: p for n, p, _ in tools}
-            def on_result(result):
-                self._on_tools_result(result, original)
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools), on_result)
+                ToolsModal(tools, self.cli_executor.send_chat_message))
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
@@ -652,29 +653,6 @@ class KodaApp(App):
         prompts = self.cli_executor.prompt_list(self.project_path)
         self.push_screen(PromptsManagerModal(prompts), callback=self._on_manager_result)
     
-    def _on_tools_result(self, result: dict, original: dict):
-        if not result:
-            return
-        action = result.get("__action__")
-        if action == "trust-all":
-            self.cli_executor.send_chat_message("/tools trust-all")
-            self.query_one(ChatArea).add_log(t("tools_updated"))
-            return
-        if action == "reset":
-            self.cli_executor.send_chat_message("/tools reset")
-            self.query_one(ChatArea).add_log(t("tools_updated"))
-            return
-        # Normal diff: compare checkbox state vs original permission
-        to_trust = [n for n, on in result.items() if on and original.get(n) == "ask"]
-        to_untrust = [n for n, on in result.items() if not on and original.get(n) == "trusted"]
-        if not to_trust and not to_untrust:
-            return
-        if to_trust:
-            self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
-        if to_untrust:
-            self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
-        self.query_one(ChatArea).add_log(t("tools_updated"))
-
     def _start_chat(self):
         """Centralized chat startup using cli_executor PTY method."""
         agent = self.agent_manager.active_agent
