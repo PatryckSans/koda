@@ -411,6 +411,12 @@ class KodaApp(App):
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
 
+        # Context percentage update
+        if line.startswith("__CONTEXT__:"):
+            pct = float(line.split(":", 1)[1])
+            self.call_from_thread(status.set_context, pct)
+            return
+
         # Trust picker detection
         if line.startswith("__TRUST_PICKER__:"):
             self._trust_options = []
