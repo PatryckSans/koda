@@ -519,8 +519,23 @@ class KodaApp(App):
         return bool(getattr(self, '_response_lines', None))
 
     def action_handle_escape(self):
-        if self._is_processing():
-            self.cli_executor.send_interrupt()
+        # DEBUG
+        _dl = __import__("os").path.expanduser("~/koda_debug.log")
+        processing = self._is_processing()
+        ghost_anim = False
+        try:
+            from kiro_tui.components.chat import GhostMascot
+            ghost_anim = self.query_one("#ghost", GhostMascot)._animating
+        except Exception:
+            pass
+        resp_lines = len(getattr(self, '_response_lines', []))
+        with open(_dl, "a", encoding="utf-8") as f:
+            f.write(f"ESC pressed: processing={processing} ghost={ghost_anim} resp_lines={resp_lines}\n")
+
+        if processing:
+            result = self.cli_executor.send_interrupt()
+            with open(_dl, "a", encoding="utf-8") as f:
+                f.write(f"  -> interrupt sent, result={result}\n")
             self._end_response()
             chat = self.query_one(ChatArea)
             chat.end_response()
