@@ -55,6 +55,8 @@ class CLIExecutor:
             args += ["--agent", agent]
         if model and model != "auto":
             args += ["--model", model]
+        if trusted_tools is not None:
+            args += ["--trust-tools", ",".join(trusted_tools)]
         return args
 
     @staticmethod
