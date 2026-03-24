@@ -58,3 +58,19 @@ class AgentManager:
     def get_active_agent(self) -> Optional[str]:
         """Get currently active agent"""
         return self.active_agent
+
+    def get_allowed_tools(self) -> set:
+        """Read allowedTools from active agent config. Returns expanded tool names."""
+        import os, json
+        name = self.active_agent
+        if not name:
+            return set()
+        for base in [".kiro/agents", os.path.expanduser("~/.kiro/agents")]:
+            path = os.path.join(base, f"{name}.json")
+            if os.path.exists(path):
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        return set(json.load(f).get("allowedTools", []))
+                except Exception:
+                    pass
+        return set()

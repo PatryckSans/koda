@@ -31,8 +31,10 @@ class CLIExecutor:
         self._last_sent = None  # for echo filtering
         self._context_callback = None
         self._cached_tools = []  # (name, trusted) tuples from /tools
+        self._tools_server_map = {}  # tool_name -> @server or None
         self._collecting_tools = False
         self._tools_ready_callback = None
+        self._tools_current_server = None
         self._in_response = False
         self._awaiting_trust_options = False
 
@@ -353,6 +355,8 @@ class CLIExecutor:
         if line.startswith("Tool") and "Permission" in line:
             self._collecting_tools = True
             self._cached_tools = []
+            self._tools_server_map = {}
+            self._tools_current_server = None
             return
         if self._collecting_tools:
             if line.startswith("Total"):
@@ -363,10 +367,15 @@ class CLIExecutor:
                 name = m_tool.group(1)
                 trusted = "not trusted" not in line
                 self._cached_tools.append((name, trusted))
+                if self._tools_current_server:
+                    self._tools_server_map[name] = self._tools_current_server
                 return
             # Section headers: "Built-in", "shadcn-ui (MCP)", etc.
-            if "(MCP)" in line or line in ("Built-in", "Native"):
+            if "(MCP)" in line:
+                self._tools_current_server = "@" + line.split("(MCP)")[0].strip()
                 return
+            if line in ("Built-in", "Native"):
+                self._tools_current_server = None
                 return
 
         # Trust picker detection
@@ -676,6 +685,10 @@ class CLIExecutor:
     def get_tools(self) -> list:
         """Return cached (name, trusted) tuples."""
         return list(self._cached_tools)
+
+    def get_tools_server_map(self) -> dict:
+        """Return {tool_name: '@server'} for MCP tools."""
+        return dict(self._tools_server_map)
 
     # ── Prompts ─────────────────────────────────────────────────────
 

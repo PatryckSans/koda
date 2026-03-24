@@ -76,9 +76,10 @@ class ToolsModal(ModalScreen[dict]):
     ToolsModal #tools-buttons { height: auto; margin-top: 1; dock: bottom; }
     """
     
-    def __init__(self, tools: list):
+    def __init__(self, tools: list, locked: set = None):
         super().__init__()
         self.tools = tools
+        self.locked = locked or set()
         self.checkboxes = {}
     
     def compose(self) -> ComposeResult:
@@ -86,12 +87,19 @@ class ToolsModal(ModalScreen[dict]):
             yield Label(t("tools_title"), id="tools-title")
             with VerticalScroll(id="tools-scroll"):
                 for name, trusted in self.tools:
-                    cb = Checkbox(name, value=trusted, id=f"tool-{name}")
+                    is_locked = self._is_locked(name)
+                    label = f"{name} 🔒" if is_locked else name
+                    cb = Checkbox(label, value=trusted, id=f"tool-{name}")
+                    if is_locked:
+                        cb.disabled = True
                     self.checkboxes[name] = cb
                     yield cb
             with Horizontal(id="tools-buttons"):
                 yield Button("Apply", variant="primary", id="apply")
                 yield Button("Cancel", id="cancel")
+
+    def _is_locked(self, tool_name: str) -> bool:
+        return tool_name in self.locked
     
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "apply":
@@ -582,12 +590,25 @@ class KodaApp(App):
             tools = self.cli_executor.get_tools()
             if not tools:
                 tools = [(n, False) for n in self.BUILTIN_TOOLS]
-            # Capture baseline so diff is computed against what modal showed
+            # Build locked set from agent's allowedTools + server map
+            allowed = self.agent_manager.get_allowed_tools()
+            server_map = self.cli_executor.get_tools_server_map()
+            # Alias map: /tools display name -> allowedTools canonical name
+            _ALIASES = {"shell": "execute_bash", "read": "fs_read", "write": "fs_write",
+                        "todo": "todo_list", "subagent": "use_subagent", "aws": "use_aws",
+                        "report": "report_issue"}
+            locked = set()
+            for name, _ in tools:
+                canonical = _ALIASES.get(name, name)
+                if name in allowed or canonical in allowed:
+                    locked.add(name)
+                elif server_map.get(name) in allowed:
+                    locked.add(name)
             original = {n: t for n, t in tools}
             def on_result(result):
                 self._on_tools_result(result, original)
             self.call_from_thread(self.push_screen,
-                ToolsModal(tools), on_result)
+                ToolsModal(tools, locked), on_result)
         self.cli_executor.refresh_tools(callback=on_tools_ready)
 
     def action_save_chat(self):
@@ -644,20 +665,7 @@ class KodaApp(App):
             self.cli_executor.send_chat_message(f"/tools trust {' '.join(to_trust)}")
         if to_untrust:
             self.cli_executor.send_chat_message(f"/tools untrust {' '.join(to_untrust)}")
-        chat = self.query_one(ChatArea)
-        # Refresh from kiro-cli to get actual state (allowedTools can't be untrusted)
-        import threading
-        def verify():
-            import time; time.sleep(2)
-            def on_verified():
-                actual = {n: t for n, t in self.cli_executor.get_tools()}
-                failed = [n for n in to_untrust if actual.get(n, False)]
-                if failed:
-                    self.call_from_thread(
-                        chat.add_log, f"⚠ {', '.join(failed)}: allowedTools (agent config)")
-            self.cli_executor.refresh_tools(callback=on_verified)
-        threading.Thread(target=verify, daemon=True).start()
-        chat.add_log(t("tools_updated"))
+        self.query_one(ChatArea).add_log(t("tools_updated"))
 
     def _start_chat(self):
         """Centralized chat startup using cli_executor PTY method."""
