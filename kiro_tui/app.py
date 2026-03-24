@@ -223,6 +223,31 @@ class PromptsManagerModal(ModalScreen[str]):
             self.dismiss("")
 
 
+class ConfirmModal(ModalScreen[bool]):
+    DEFAULT_CSS = """
+    ConfirmModal { align: center middle; }
+    ConfirmModal > Vertical { width: 50; height: auto; border: thick $primary; background: $surface; padding: 1 2; }
+    """
+    BINDINGS = [("escape", "cancel", "Close")]
+
+    def __init__(self, message: str):
+        super().__init__()
+        self._message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(self._message)
+            with Horizontal():
+                yield Button(t("yes"), variant="error", id="confirm-yes")
+                yield Button(t("no"), id="confirm-no")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.dismiss(event.button.id == "confirm-yes")
+
+    def action_cancel(self):
+        self.dismiss(False)
+
+
 class ConfirmQuitModal(ModalScreen[bool]):
     DEFAULT_CSS = """
     ConfirmQuitModal { align: center middle; }
@@ -578,10 +603,13 @@ class KodaApp(App):
 
     def action_clear_chat(self):
         """Clear chat history"""
-        self.cli_executor.send_chat_message("/clear")
-        chat = self.query_one(ChatArea)
-        chat.query_one("#messages").remove_children()
-        chat.add_log(t("chat_cleared"))
+        def on_confirm(confirmed: bool):
+            if confirmed:
+                self.cli_executor.send_chat_message("/clear")
+                chat = self.query_one(ChatArea)
+                chat.query_one("#messages").remove_children()
+                chat.add_log(t("chat_cleared"))
+        self.push_screen(ConfirmModal(t("confirm_clear")), on_confirm)
 
     def action_compact_chat(self):
         """Compact chat"""
