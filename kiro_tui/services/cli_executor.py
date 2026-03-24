@@ -143,6 +143,15 @@ class CLIExecutor:
                             if self._tools_ready_callback:
                                 self._tools_ready_callback()
                                 self._tools_ready_callback = None
+                    # Flush buffer if it contains a prompt line (no trailing \n)
+                    if buf:
+                        clean = self._clean(buf)
+                        if self._PROMPT_RE.search(clean) and len(clean) < 60:
+                            try:
+                                self._process_line(buf)
+                            except Exception:
+                                pass
+                            buf = ""
                     continue
                 try:
                     data = os.read(self._pty_master, 4096).decode('utf-8', errors='replace')
@@ -178,7 +187,7 @@ class CLIExecutor:
                         pass
                     buf = ""
                 # Check for prompt in buffer (no trailing \n) to capture context %
-                elif self._PROMPT_RE.match(clean):
+                elif self._PROMPT_RE.search(clean) and len(clean) < 60:
                     try:
                         self._process_line(buf)
                     except Exception:
@@ -215,13 +224,6 @@ class CLIExecutor:
         """Process a single line of chat output."""
         line = self._clean(raw)
         display = self._clean_display(raw)
-        # DEBUG: log all lines to diagnose ghost animation issue
-        try:
-            with open(os.path.expanduser("~/koda_debug.log"), "a", encoding="utf-8") as f:
-                prompt_match = bool(self._PROMPT_RE.search(line) and len(line) < 60)
-                f.write(f"[RAW] {raw!r}\n[CLEAN] {line!r} | in_resp={self._in_response} | prompt_match={prompt_match} | last_sent={self._last_sent!r:.50}\n\n")
-        except Exception:
-            pass
         if not line:
             if self._in_response:
                 if self.chat_output_callback:
