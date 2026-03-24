@@ -429,9 +429,6 @@ class KodaApp(App):
             return
         self._last_chat_line = line
 
-        # Reset idle timer — stop ghost if no output for 3s with pending response
-        self._reset_idle_timer()
-
         chat = self.query_one(ChatArea)
         status = self.query_one(StatusBar)
 
@@ -484,21 +481,6 @@ class KodaApp(App):
             self.call_from_thread(chat.add_message, full, "assistant")
         else:
             self.call_from_thread(chat.update_response, full)
-
-    def _reset_idle_timer(self):
-        """Reset the idle timer that stops ghost after no output."""
-        if hasattr(self, '_idle_timer'):
-            self._idle_timer.stop()
-        self._idle_timer = self.set_timer(3.0, self._on_idle_timeout)
-
-    def _on_idle_timeout(self):
-        """No output for 3s — if response pending, finalize."""
-        if getattr(self, '_response_lines', None):
-            self._end_response()
-            try:
-                self.query_one(StatusBar).set_status(t("ready"))
-            except Exception:
-                pass
 
     def _end_response(self):
         """Finalize current response accumulation."""

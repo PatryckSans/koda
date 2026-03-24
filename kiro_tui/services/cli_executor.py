@@ -207,8 +207,8 @@ class CLIExecutor:
             if self.chat_output_callback:
                 self.chat_output_callback(f"Error: {e}")
 
-    # Prompt line pattern: "6% > ..." or "12% > ..."
-    _PROMPT_RE = re.compile(r'^(?:\[.*?\]\s*)?\d+%\s*>')
+    # Prompt line pattern: "6% > ..." or "agent-name 12% > ..."
+    _PROMPT_RE = re.compile(r'\d+%\s*>')
     _TOOL_LINE_RE = re.compile(r'^-\s+(\w+)\s+')
 
     def _process_line(self, raw: str):
@@ -222,7 +222,7 @@ class CLIExecutor:
             return
 
         # Filter prompt lines — always check (ends response)
-        if self._PROMPT_RE.match(line):
+        if self._PROMPT_RE.search(line) and len(line) < 60:
             self._in_response = False
             if self._collecting_tools:
                 self._collecting_tools = False
