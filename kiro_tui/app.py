@@ -769,6 +769,7 @@ class KodaApp(App):
     
     def _on_load_result(self, name: str):
         if name:
+            self._end_response()
             chat = self.query_one(ChatArea)
             self.cli_executor.send_chat_message(f"/chat load {name}")
             chat.add_log(t("loading_chat", name=name))
