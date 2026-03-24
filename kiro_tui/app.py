@@ -356,6 +356,10 @@ class KodaApp(App):
         
         self.project_path = path
         self.notify(t("loading_project", name=os.path.basename(path)), timeout=5)
+        self.set_timer(0.1, lambda: self._init_project(path))
+
+    def _init_project(self, path: str):
+        """Initialize project after notification renders."""
         
         # Update auth indicator
         self._update_auth_indicator(self.is_authenticated)
