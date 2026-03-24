@@ -186,30 +186,47 @@ if [ "$PLATFORM" = "linux" ]; then
     APPS_DIR="$HOME/.local/share/applications"
     mkdir -p "$APPS_DIR"
 
+    # Detect terminal emulator
+    TERM_CMD=""
+    for t in cosmic-term gnome-terminal konsole xfce4-terminal mate-terminal lxterminal alacritty kitty wezterm foot xterm; do
+        if command -v "$t" >/dev/null 2>&1; then
+            TERM_CMD="$t"
+            break
+        fi
+    done
+
+    KODA_CMD="bash -c 'source $INSTALL_DIR/venv/bin/activate && python -m kiro_tui.main'"
+
+    if [ -n "$TERM_CMD" ]; then
+        case "$TERM_CMD" in
+            gnome-terminal) EXEC_LINE="$TERM_CMD -- $KODA_CMD" ;;
+            konsole|mate-terminal) EXEC_LINE="$TERM_CMD -e $KODA_CMD" ;;
+            xfce4-terminal) EXEC_LINE="$TERM_CMD -e \"$KODA_CMD\"" ;;
+            *) EXEC_LINE="$TERM_CMD -e $KODA_CMD" ;;
+        esac
+        USE_TERMINAL=false
+    else
+        EXEC_LINE="$KODA_CMD"
+        USE_TERMINAL=true
+    fi
+
     cat > "$APPS_DIR/koda.desktop" << EOF
 [Desktop Entry]
 Name=KODA
 Comment=Kiro Operator Dashboard Application
-Exec=bash -c 'source $INSTALL_DIR/venv/bin/activate && python -m kiro_tui.main'
-Terminal=true
+Exec=$EXEC_LINE
+Terminal=$USE_TERMINAL
 Type=Application
 Categories=Development;
 Icon=$ICON_PATH
 EOF
 
-    # Copy to desktop — .desktop for GNOME, launcher script as fallback
+    # Copy to desktop
     if [ -d "$DESKTOP_DIR" ]; then
         cp "$APPS_DIR/koda.desktop" "$DESKTOP_DIR/"
         chmod +x "$DESKTOP_DIR/koda.desktop" 2>/dev/null
         gio set "$DESKTOP_DIR/koda.desktop" metadata::trusted true 2>/dev/null
-        # Executable launcher script (works on COSMIC and other DEs)
-        cat > "$DESKTOP_DIR/KODA.sh" << SCRIPT
-#!/bin/bash
-source "$INSTALL_DIR/venv/bin/activate"
-python -m kiro_tui.main
-SCRIPT
-        chmod +x "$DESKTOP_DIR/KODA.sh"
-        ok "Desktop shortcuts created"
+        ok "Desktop shortcut created (using $TERM_CMD)"
     fi
     ok "App menu entry created"
 fi
