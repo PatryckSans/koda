@@ -9,10 +9,6 @@ from kiro_tui.services.agent_manager import AgentManager
 from kiro_tui.services.cli_executor import CLIExecutor
 from kiro_tui.screens.project_selector import ProjectSelector
 
-_DBG_FILE = "/tmp/koda_debug.log"
-def _dbg(msg):
-    with open(_DBG_FILE, "a") as f:
-        f.write(f"{msg}\n")
 from kiro_tui.screens.login_screen import LoginScreen
 from kiro_tui.i18n import t, load_lang_from_config
 import json, os
@@ -597,19 +593,10 @@ class KodaApp(App):
     def action_toggle_tools(self):
         chat = self.query_one(ChatArea)
         send = self.cli_executor.send_chat_message
-        _dbg("action_toggle_tools called")
         def on_tools(tools):
-            _dbg(f"on_tools callback: {len(tools) if tools else 0} tools")
             if tools:
-                def show_modal():
-                    try:
-                        _dbg("pushing modal...")
-                        self.push_screen(ToolsModal(tools, send, chat.add_log))
-                        _dbg("modal pushed OK")
-                    except Exception as e:
-                        _dbg(f"ERROR: {e}")
-                        import traceback; _dbg(traceback.format_exc())
-                self.call_from_thread(show_modal)
+                self.call_from_thread(self.push_screen,
+                    ToolsModal(tools, send, chat.add_log))
             else:
                 self.call_from_thread(chat.add_log, "⚠ /tools returned empty")
         self.cli_executor.fetch_tools(on_tools)

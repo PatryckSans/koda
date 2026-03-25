@@ -228,7 +228,6 @@ class CLIExecutor:
         # Filter prompt lines — always check (ends response)
         if self._PROMPT_RE.search(line) and len(line) < 60:
             self._in_response = False
-            from kiro_tui.app import _dbg; _dbg(f"prompt: collecting={self._tools_collecting} count={len(self._tools_data)} cb={self._tools_callback is not None}")
             if self._tools_collecting:
                 self._tools_collecting = False
                 if self._tools_callback:
@@ -347,7 +346,6 @@ class CLIExecutor:
         if line.startswith("/tools") or "is now trusted" in line or "is set to per-request" in line or "All tools are now trusted" in line or "are set to per-request" in line:
             return
         if line.startswith("Tool") and "Permission" in line:
-            from kiro_tui.app import _dbg; _dbg("header detected")
             self._tools_collecting = True
             self._tools_data = []
             self._tools_server = None
@@ -360,7 +358,6 @@ class CLIExecutor:
                     ll = line.lower()
                     checked = "not trusted" not in ll
                     self._tools_data.append((name, checked, self._tools_server))
-                    from kiro_tui.app import _dbg; _dbg(f"tool: {name}")
             elif "(MCP)" in line:
                 self._tools_server = line.split("(MCP)")[0].strip()
             elif line in ("Built-in", "Native"):
@@ -669,7 +666,6 @@ class CLIExecutor:
     def fetch_tools(self, callback):
         """Send /tools and call callback(tools_list) when parsed.
         tools_list: [(name, checked, server)] where server is None for built-in."""
-        from kiro_tui.app import _dbg; _dbg("fetch_tools")
         self._tools_callback = callback
         self._tools_collecting = False
         self.send_chat_message("/tools")
