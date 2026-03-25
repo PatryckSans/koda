@@ -20,10 +20,10 @@ Write-Host ""
 
 # --- Check Python 3.8+ ---
 $python = $null
-foreach ($cmd in @("python3", "python", "py")) {
+foreach ($cmd in @("py -3", "python", "python3", "py")) {
     try {
-        $ver = & $cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-        if ($ver) {
+        $ver = Invoke-Expression "$cmd -c 'import sys; print(str(sys.version_info.major)+chr(46)+str(sys.version_info.minor))'" 2>$null
+        if ($ver -and $ver -match '^\d+\.\d+$') {
             $parts = $ver.Split(".")
             if ([int]$parts[0] -ge 3 -and [int]$parts[1] -ge 8) {
                 $python = $cmd
@@ -33,7 +33,7 @@ foreach ($cmd in @("python3", "python", "py")) {
     } catch {}
 }
 if (-not $python) { Write-Fail "Python 3.8+ is required. Download from https://www.python.org/downloads/" }
-Write-Ok "Python: $(& $python --version)"
+Write-Ok "Python: $(Invoke-Expression "$python --version")"
 
 # --- Check WSL ---
 try {
@@ -80,7 +80,7 @@ Write-Ok "Downloaded to $INSTALL_DIR"
 
 # --- Create venv and install ---
 Write-Info "Creating virtual environment..."
-& $python -m venv $VENV_DIR
+Invoke-Expression "$python -m venv $VENV_DIR"
 & "$VENV_DIR\Scripts\pip.exe" install --quiet --upgrade pip
 & "$VENV_DIR\Scripts\pip.exe" install --quiet -e $INSTALL_DIR
 Write-Ok "Dependencies installed"
