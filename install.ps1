@@ -10,7 +10,7 @@ $VENV_DIR = "$INSTALL_DIR\venv"
 function Write-Info($msg)  { Write-Host "[KODA] $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)    { Write-Host "[OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg)  { Write-Host "[!] $msg" -ForegroundColor Yellow }
-function Write-Fail($msg)  { Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
+function Write-Fail($msg)  { Write-Host "[ERROR] $msg" -ForegroundColor Red; Read-Host "Press Enter to close"; exit 1 }
 
 Write-Host ""
 Write-Host "  ██▄▀  █▀█  █▀▄  ▄▀█" -ForegroundColor Cyan
@@ -173,3 +173,4 @@ Write-Host ""
 Write-Host "  Run:  koda"
 Write-Host "  (Restart terminal if 'koda' is not found)"
 Write-Host ""
+Read-Host "Press Enter to close"
