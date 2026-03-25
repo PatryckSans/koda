@@ -95,7 +95,11 @@ function Install-Koda {
 
     if ($needInstall) {
         Write-Info "Installing kiro-cli $KIRO_VERSION inside WSL..."
-        wsl bash -c "curl -fsSL https://cli.kiro.dev/install | bash" 2>&1 | Out-Null
+        $installOut = wsl bash -c "curl -fsSL https://cli.kiro.dev/install 2>/dev/null | bash 2>&1"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Install script output:"
+            $installOut | ForEach-Object { Write-Host "  $_" }
+        }
         try {
             $kiroVer = wsl kiro-cli --version 2>&1
             if ($LASTEXITCODE -eq 0) {
