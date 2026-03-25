@@ -20,19 +20,48 @@ Write-Host ""
 
 # --- Check Python 3.8+ ---
 $python = $null
-foreach ($cmd in @("py -3", "python", "python3", "py")) {
+
+# Try py launcher first (most reliable on Windows)
+try {
+    $out = & py -3 --version 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out -match 'Python (\d+)\.(\d+)') {
+        if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { $python = "py -3" }
+    }
+} catch {}
+
+# Try common install paths (avoids Microsoft Store alias)
+if (-not $python) {
+    $paths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+        "$env:PROGRAMFILES\Python3*\python.exe",
+        "$env:PROGRAMFILES(x86)\Python3*\python.exe"
+    )
+    foreach ($pattern in $paths) {
+        $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+        if ($found) {
+            try {
+                $out = & $found.FullName --version 2>$null
+                if ($out -match 'Python (\d+)\.(\d+)' -and [int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) {
+                    $python = $found.FullName
+                }
+            } catch {}
+            if ($python) { break }
+        }
+    }
+}
+
+# Try plain python (may hit Microsoft Store alias — last resort)
+if (-not $python) {
     try {
-        $out = Invoke-Expression "$cmd --version" 2>$null
-        if ($out -match 'Python (\d+)\.(\d+)') {
-            if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) {
-                $python = $cmd
-                break
-            }
+        $out = & python --version 2>$null
+        if ($LASTEXITCODE -eq 0 -and $out -match 'Python (\d+)\.(\d+)') {
+            if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { $python = "python" }
         }
     } catch {}
 }
-if (-not $python) { Write-Fail "Python 3.8+ is required. Download from https://www.python.org/downloads/" }
-Write-Ok "Python: $(Invoke-Expression "$python --version")"
+
+if (-not $python) { Write-Fail "Python 3.8+ is required. Download from https://www.python.org/downloads/`nTip: If Python is installed, disable Microsoft Store aliases in Settings > Apps > App execution aliases" }
+Write-Ok "Python: $(Invoke-Expression """$python"" --version")"
 
 # --- Check WSL ---
 try {
