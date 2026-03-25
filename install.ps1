@@ -144,11 +144,22 @@ python -m kiro_tui.main %*
         Write-Ok "Icon ready"
     } catch { Write-Warn "Could not download icon" }
 
-    # --- Desktop shortcut (prefer Windows Terminal) ---
+    # --- Ensure Windows Terminal is installed ---
+    $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if (-not $wt) {
+        Write-Info "Installing Windows Terminal..."
+        try {
+            winget install --id Microsoft.WindowsTerminal --accept-source-agreements --accept-package-agreements --silent 2>$null
+            $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
+            if ($wt) { Write-Ok "Windows Terminal installed" }
+            else { Write-Warn "Windows Terminal install failed, using cmd.exe" }
+        } catch { Write-Warn "Could not install Windows Terminal, using cmd.exe" }
+    }
+
+    # --- Desktop shortcut ---
     $desktop = [Environment]::GetFolderPath("Desktop")
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut("$desktop\KODA.lnk")
-    $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
     if ($wt) {
         $shortcut.TargetPath = $wt.Source
         $shortcut.Arguments = "--title KODA cmd /c `"$launcher`""
@@ -156,7 +167,6 @@ python -m kiro_tui.main %*
     } else {
         $shortcut.TargetPath = "cmd.exe"
         $shortcut.Arguments = "/c `"$launcher`""
-        Write-Warn "Windows Terminal not found, using cmd.exe"
     }
     $shortcut.WorkingDirectory = $env:USERPROFILE
     $shortcut.Description = "KODA - Kiro Operator Dashboard Application"
