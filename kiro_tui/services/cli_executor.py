@@ -39,7 +39,7 @@ class CLIExecutor:
 
     def _build_cmd(self, args: list) -> list:
         if IS_WINDOWS:
-            return ["wsl", self.cli_command] + args
+            return ["wsl", "bash", "-lc", f"{self.cli_command} {' '.join(args)}"]
         return [self.cli_command] + args
 
     @staticmethod
@@ -98,8 +98,9 @@ class CLIExecutor:
 
             if IS_WINDOWS:
                 # Use wsl script to allocate PTY inside WSL
+                # bash -l loads profile/bashrc so kiro-cli is in PATH
                 inner = f"export LANG=C.UTF-8 LC_ALL=C.UTF-8; {self.cli_command} {' '.join(args)}"
-                cmd = ["wsl", "script", "-qc", inner, "/dev/null"]
+                cmd = ["wsl", "bash", "-lc", f"script -qc '{inner}' /dev/null"]
                 self.chat_process = subprocess.Popen(
                     cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, encoding='utf-8', errors='replace'
