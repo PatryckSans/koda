@@ -79,15 +79,33 @@ function Install-Koda {
     }
 
     # --- Check kiro-cli inside WSL ---
+    $KIRO_VERSION = "1.28.1"
+    $needInstall = $true
     try {
         $kiroVer = wsl kiro-cli --version 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "no kiro" }
-        Write-Ok "kiro-cli installed in WSL"
-    } catch {
-        Write-Warn "kiro-cli is NOT installed inside WSL. KODA requires kiro-cli to function."
-        Write-Warn "Open WSL and install from: https://kiro.dev/docs/cli/install/"
-        $reply = Read-Host "Continue anyway? [y/N]"
-        if ($reply -ne "y" -and $reply -ne "Y") { return }
+        if ($LASTEXITCODE -eq 0 -and $kiroVer -match '(\d+\.\d+\.\d+)') {
+            if ($Matches[1] -eq $KIRO_VERSION) {
+                Write-Ok "kiro-cli $KIRO_VERSION"
+                $needInstall = $false
+            } else {
+                Write-Warn "kiro-cli $($Matches[1]) found, need $KIRO_VERSION"
+            }
+        }
+    } catch {}
+
+    if ($needInstall) {
+        Write-Info "Installing kiro-cli $KIRO_VERSION inside WSL..."
+        wsl bash -c "curl -fsSL https://cli.kiro.dev/install | bash" 2>&1 | Out-Null
+        try {
+            $kiroVer = wsl kiro-cli --version 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Ok "kiro-cli installed: $kiroVer"
+            } else { throw "fail" }
+        } catch {
+            Write-Warn "kiro-cli install failed. Install manually: https://kiro.dev/docs/cli/install/"
+            $reply = Read-Host "Continue anyway? [y/N]"
+            if ($reply -ne "y" -and $reply -ne "Y") { return }
+        }
     }
 
     # --- Remove previous ---
