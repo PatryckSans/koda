@@ -184,5 +184,5 @@ python -m kiro_tui.main %*
     Write-Host ""
 }
 
-Install-Koda
+try { Install-Koda } catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
 Read-Host "Press Enter to close"
