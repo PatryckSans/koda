@@ -18,53 +18,52 @@ function Install-Koda {
     Write-Host "  Kiro Operator Dashboard Application" -ForegroundColor Cyan
     Write-Host ""
 
-    # --- Check Python 3.8+ ---
-    $python = $null
-
-    # Try py launcher first (most reliable on Windows)
-    try {
-        $out = & py -3 --version 2>$null
-        if ($LASTEXITCODE -eq 0 -and $out -match 'Python (\d+)\.(\d+)') {
-            if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { $python = "py -3" }
-        }
-    } catch {}
-
-    # Try common install paths (avoids Microsoft Store alias)
-    if (-not $python) {
-        $paths = @(
+    # --- Find or install Python 3.8+ ---
+    function Find-Python {
+        try {
+            $out = & py -3 --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $out -match 'Python (\d+)\.(\d+)') {
+                if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { return "py -3" }
+            }
+        } catch {}
+        foreach ($pattern in @(
             "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
-            "$env:PROGRAMFILES\Python3*\python.exe",
-            "${env:PROGRAMFILES(x86)}\Python3*\python.exe"
-        )
-        foreach ($pattern in $paths) {
+            "$env:PROGRAMFILES\Python3*\python.exe"
+        )) {
             $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
             if ($found) {
                 try {
                     $out = & $found.FullName --version 2>$null
                     if ($out -match 'Python (\d+)\.(\d+)' -and [int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) {
-                        $python = "`"$($found.FullName)`""
+                        return "`"$($found.FullName)`""
                     }
                 } catch {}
-                if ($python) { break }
             }
         }
-    }
-
-    # Try plain python (may hit Microsoft Store alias — last resort)
-    if (-not $python) {
         try {
             $out = & python --version 2>$null
             if ($LASTEXITCODE -eq 0 -and $out -match 'Python (\d+)\.(\d+)') {
-                if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { $python = "python" }
+                if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) { return "python" }
             }
         } catch {}
+        return $null
     }
 
+    $python = Find-Python
     if (-not $python) {
-        Write-Host "[ERROR] Python 3.8+ is required." -ForegroundColor Red
-        Write-Host "Download from https://www.python.org/downloads/" -ForegroundColor Red
-        Write-Host "Tip: If installed, disable Microsoft Store aliases in Settings > Apps > App execution aliases" -ForegroundColor Yellow
-        return
+        Write-Info "Python not found. Installing Python 3.12..."
+        $pyInstaller = Join-Path $env:TEMP "python-installer.exe"
+        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe" -OutFile $pyInstaller -UseBasicParsing
+        Write-Info "Running Python installer (this may take a minute)..."
+        Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_launcher=1" -Wait
+        Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
+        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+        $python = Find-Python
+        if (-not $python) {
+            Write-Host "[ERROR] Python install failed. Install manually from https://www.python.org/downloads/" -ForegroundColor Red
+            return
+        }
+        Write-Ok "Python installed"
     }
     Write-Ok "Python: $(Invoke-Expression "$python --version")"
 
