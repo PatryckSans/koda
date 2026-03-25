@@ -22,10 +22,9 @@ Write-Host ""
 $python = $null
 foreach ($cmd in @("py -3", "python", "python3", "py")) {
     try {
-        $ver = Invoke-Expression "$cmd -c 'import sys; print(str(sys.version_info.major)+chr(46)+str(sys.version_info.minor))'" 2>$null
-        if ($ver -and $ver -match '^\d+\.\d+$') {
-            $parts = $ver.Split(".")
-            if ([int]$parts[0] -ge 3 -and [int]$parts[1] -ge 8) {
+        $out = Invoke-Expression "$cmd --version" 2>$null
+        if ($out -match 'Python (\d+)\.(\d+)') {
+            if ([int]$Matches[1] -ge 3 -and [int]$Matches[2] -ge 8) {
                 $python = $cmd
                 break
             }
