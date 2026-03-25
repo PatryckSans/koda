@@ -115,6 +115,11 @@ function Install-Koda {
     # --- Remove previous ---
     if (Test-Path $INSTALL_DIR) {
         Write-Info "Removing previous installation..."
+        # Kill any running KODA/python processes from the venv
+        Get-Process python* -ErrorAction SilentlyContinue | Where-Object {
+            $_.Path -like "*$INSTALL_DIR*"
+        } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
         Remove-Item -Recurse -Force $INSTALL_DIR
     }
 
